@@ -27,7 +27,16 @@ export async function handleApiRequest(raw: Request): Promise<Response> {
       if (!handled) res.status(404).json({ error: "Not found" });
     } catch (err) {
       logger.error({ err, method: req.method, path: req.path }, "Unhandled API error");
-      if (!res.headersSent) res.status(500).json({ error: "Internal Server Error" });
+      if (!res.headersSent) {
+        // Operators can see the underlying error by passing ?debug=<CRON_SECRET>.
+        const secret = process.env.CRON_SECRET;
+        const debug = Boolean(secret) && new URL(raw.url).searchParams.get("debug") === secret;
+        res.status(500).json(
+          debug
+            ? { error: "Internal Server Error", detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err), cause: err instanceof Error && err.cause ? String(err.cause) : undefined }
+            : { error: "Internal Server Error" },
+        );
+      }
     }
     const out = res.toResponse();
     // The DB pool for this request closes when withRequestDb returns, so make

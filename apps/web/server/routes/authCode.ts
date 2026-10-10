@@ -47,6 +47,11 @@ router.post("/auth/send-code", async (req, res): Promise<void> => {
     if (!resp.ok) {
       const detail = (await resp.text().catch(() => "")).slice(0, 300);
       req.log.error({ status: resp.status, detail }, "Supabase OTP request failed");
+      const secret = process.env.CRON_SECRET;
+      if (secret && req.query.debug === secret) {
+        res.status(502).json({ error: "Supabase OTP request failed", status: resp.status, detail });
+        return;
+      }
       if (resp.status === 429) {
         res.status(429).json({ error: "Too many code requests. Please wait a minute and try again." });
         return;
