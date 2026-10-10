@@ -96,4 +96,7 @@ export const pool: pg.Pool = new Proxy({} as pg.Pool, {
   },
 });
 
+/** Exposed for operator diagnostics only. */
+export const pgDriver = pg;
+
 export * from "./schema";

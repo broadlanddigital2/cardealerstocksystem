@@ -1,6 +1,6 @@
 import { Router } from "../http";
 import { sql } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, pgDriver } from "@workspace/db";
 
 // GET /_diag?debug=<CRON_SECRET> — operator-only health report: which config is
 // present (never values) and whether the database answers within 8 seconds.
@@ -38,7 +38,26 @@ router.get("/_diag", async (req, res): Promise<void> => {
       ms: Date.now() - started,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
       cause: err instanceof Error && err.cause ? String(err.cause) : undefined,
+      causeStack: err instanceof Error && err.cause instanceof Error ? err.cause.stack?.split("\n").slice(0, 12) : undefined,
     };
+  }
+  const driver: Record<string, unknown> = {
+    typeofPool: typeof (pgDriver as unknown as { Pool?: unknown }).Pool,
+    typeofClient: typeof (pgDriver as unknown as { Client?: unknown }).Client,
+    userAgent: typeof navigator !== "undefined" ? (navigator as { userAgent?: string }).userAgent : null,
+  };
+  try {
+    const c = new (pgDriver as unknown as { Client: new (o: unknown) => { connect(): Promise<void>; end(): Promise<void> } }).Client({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 8000,
+    });
+    await withTimeout(c.connect(), 9000);
+    await c.end();
+    driver.rawClient = "connected";
+  } catch (err) {
+    driver.rawClient = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    driver.rawClientStack = err instanceof Error ? err.stack?.split("\n").slice(0, 12) : undefined;
   }
   res.json({
     env: {
@@ -50,6 +69,7 @@ router.get("/_diag", async (req, res): Promise<void> => {
       CRON_SECRET: true,
     },
     database,
+    driver,
   });
 });
 
