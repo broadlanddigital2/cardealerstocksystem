@@ -38,12 +38,29 @@ function makePool(max: number): pg.Pool {
 // therefore wrapped in `withRequestDb()`, which opens a small pool for that
 // request and closes it afterwards. Code outside a request scope (tests,
 // scripts, `next dev` on Node) falls back to one shared pool.
-const requestScope = new AsyncLocalStorage<{ db: Database; pool: pg.Pool }>();
-let shared: { db: Database; pool: pg.Pool } | null = null;
+interface Scope {
+  db: Database;
+  pool: pg.Pool;
+}
 
-function current(): { db: Database; pool: pg.Pool } {
+// Request scope holds a lazily-created pool: requests that never touch the
+// database (health checks, static API responses) never open a connection.
+interface LazyScope {
+  current: Scope | null;
+}
+
+const requestScope = new AsyncLocalStorage<LazyScope>();
+let shared: Scope | null = null;
+
+function current(): Scope {
   const scoped = requestScope.getStore();
-  if (scoped) return scoped;
+  if (scoped) {
+    if (!scoped.current) {
+      const p = makePool(Number(process.env.DB_POOL_MAX ?? 3));
+      scoped.current = { pool: p, db: drizzle(p, { schema }) };
+    }
+    return scoped.current;
+  }
   if (!shared) {
     const p = makePool(Number(process.env.DB_POOL_MAX ?? 5));
     shared = { pool: p, db: drizzle(p, { schema }) };
@@ -53,12 +70,11 @@ function current(): { db: Database; pool: pg.Pool } {
 
 export async function withRequestDb<T>(fn: () => Promise<T>): Promise<T> {
   if (process.env.DB_SCOPE !== "request") return fn();
-  const p = makePool(Number(process.env.DB_POOL_MAX ?? 3));
-  const scoped = { pool: p, db: drizzle(p, { schema }) };
+  const scope: LazyScope = { current: null };
   try {
-    return await requestScope.run(scoped, fn);
+    return await requestScope.run(scope, fn);
   } finally {
-    p.end().catch(() => {});
+    scope.current?.pool.end().catch(() => {});
   }
 }
 
