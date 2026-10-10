@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 import { db, appUsersTable, dealerSettingsTable } from "@workspace/db";
 import { CreateAppUserBody, UpdateAppUserBody } from "@workspace/api-zod";
 import {

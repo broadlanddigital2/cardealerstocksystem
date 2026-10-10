@@ -1,4 +1,4 @@
-import { and, isNotNull, lte } from "drizzle-orm";
+import { and, isNotNull, lte } from "@workspace/db";
 import { db, vehiclesTable } from "@workspace/db";
 import { logger } from "./logger";
 

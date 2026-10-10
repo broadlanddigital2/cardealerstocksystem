@@ -1,6 +1,4 @@
-import { withRequestDb } from "@workspace/db";
 import { runScheduledJob, type ScheduledJob } from "@/server/cron";
-import { requestDbConnectionString } from "@/server/lib/dbConnection";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +12,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ job: string }> 
   }
   const { job } = await ctx.params;
   try {
-    const result = await withRequestDb(() => runScheduledJob(job as ScheduledJob), {
-      connectionString: requestDbConnectionString(),
-    });
+    const result = await runScheduledJob(job as ScheduledJob);
     return Response.json({ ok: true, job, result });
   } catch (err) {
     return Response.json(

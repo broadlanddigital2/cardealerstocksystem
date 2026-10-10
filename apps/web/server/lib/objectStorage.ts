@@ -9,7 +9,7 @@
 //
 // Uses the Storage REST API directly via fetch, so it runs on Node and on
 // Cloudflare Workers without extra SDKs.
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "@workspace/db";
 import { db, storedObjectsTable } from "@workspace/db";
 import { ObjectPermission, type ObjectAclPolicy, canAccessPolicy } from "./objectAcl";
 
