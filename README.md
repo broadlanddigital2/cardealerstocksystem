@@ -2,7 +2,7 @@
 
 UK second-hand motor dealer stock book for accountants' motor-trade clients. Tracks vehicles from purchase to sale, applies the VAT Margin Scheme (Second-hand Goods) automatically, and produces branded margin-scheme invoices, reports and exports. Includes a public showroom website for the dealer.
 
-**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** Postgres + Storage · Supabase Auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
+**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** (Postgres via its HTTPS API, Storage, Auth) · Supabase Auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
 
 ## Layout
 
@@ -15,7 +15,7 @@ UK second-hand motor dealer stock book for accountants' motor-trade clients. Tra
 | `apps/web/middleware.ts` | Customer-domain → showroom rewrite |
 | `apps/web/src/lib/auth.tsx` | Supabase Auth client + hooks; 6-digit code sign-in in `src/components/auth` |
 | `apps/web/worker.ts` | Cloudflare entry: OpenNext worker + cron (`scheduled`) handler |
-| `lib/db/` | Drizzle schema (source of truth) and generated SQL `migrations/` |
+| `lib/db/` | Drizzle schema (source of truth), generated SQL `migrations/`, and `supabaseDb.ts` — the data layer that runs Drizzle-style queries over Supabase's HTTPS API (no Postgres connection from the app) |
 | `lib/api-spec/` | OpenAPI spec → generated `lib/api-zod` + `lib/api-client-react` (Orval) |
 | `lib/report-calc/` | Pure VAT / report / Xero export maths (unit-tested) |
 
@@ -67,7 +67,6 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase **transaction pooler** URI (port 6543) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API keys → `service_role` / secret key |
 | `CRON_SECRET` | any long random string |
 | `SENDGRID_API_KEY` | SendGrid API key (Mail Send) — used for enquiry alerts, staff invites, Cazoo alerts |

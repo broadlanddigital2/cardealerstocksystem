@@ -24,7 +24,7 @@
   "triggers": {
     "crons": ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"]
   },
-  // Non-secret configuration. Secrets (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+  // Non-secret configuration. Secrets (SUPABASE_SERVICE_ROLE_KEY,
   // SENDGRID_API_KEY, CRON_SECRET, RAPID_CAR_CHECK_API_KEY, FIRECRAWL_API_KEY) are set
   // with `wrangler secret put` or in the Cloudflare dashboard.
   "vars": {
