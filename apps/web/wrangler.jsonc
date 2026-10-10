@@ -24,6 +24,7 @@
   // FIRECRAWL_API_KEY) are set with `wrangler secret put` or in the dashboard.
   "vars": {
     "DB_SCOPE": "request",
+    "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
     "STORAGE_BUCKET": "stock-book",
     "SMTP_HOST": "smtp.livemail.co.uk",
     "SMTP_PORT": "465",
