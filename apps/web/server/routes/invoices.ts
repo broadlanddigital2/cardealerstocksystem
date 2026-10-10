@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "@workspace/db";
 import { db, invoicesTable, vehiclesTable } from "@workspace/db";
 import {
   CreateVehicleInvoiceBody,

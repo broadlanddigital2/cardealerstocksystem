@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 import { db, dealerSettingsTable, systemStateTable } from "@workspace/db";
 import { SHARED_TENANT_ID } from "../middlewares/requireAuth";
 import { logger } from "./logger";

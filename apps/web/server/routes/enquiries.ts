@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray } from "@workspace/db";
 import { db, enquiriesTable, vehiclesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 
@@ -15,7 +15,7 @@ const ALLOWED_STATUSES = new Set(["new", "read", "archived"]);
 // display. Registration is included here because this surface is dealer-only.
 router.get("/enquiries", async (req, res): Promise<void> => {
   const userId = req.userId!;
-  const rows = await db
+  const enquiries = await db
     .select({
       id: enquiriesTable.id,
       vehicleId: enquiriesTable.vehicleId,
@@ -26,14 +26,34 @@ router.get("/enquiries", async (req, res): Promise<void> => {
       notes: enquiriesTable.notes,
       status: enquiriesTable.status,
       createdAt: enquiriesTable.createdAt,
-      vehicleMake: vehiclesTable.make,
-      vehicleModel: vehiclesTable.model,
-      vehicleRegistration: vehiclesTable.registrationNumber,
     })
     .from(enquiriesTable)
-    .leftJoin(vehiclesTable, eq(enquiriesTable.vehicleId, vehiclesTable.id))
     .where(eq(enquiriesTable.userId, userId))
     .orderBy(desc(enquiriesTable.createdAt));
+
+  // Vehicle context for each lead (previously a LEFT JOIN).
+  const vehicleIds = [...new Set(enquiries.map((e) => e.vehicleId).filter((id): id is number => id != null))];
+  const vehicles = vehicleIds.length
+    ? await db
+        .select({
+          id: vehiclesTable.id,
+          make: vehiclesTable.make,
+          model: vehiclesTable.model,
+          registrationNumber: vehiclesTable.registrationNumber,
+        })
+        .from(vehiclesTable)
+        .where(inArray(vehiclesTable.id, vehicleIds))
+    : [];
+  const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+  const rows = enquiries.map((e) => {
+    const v = e.vehicleId != null ? vehicleById.get(e.vehicleId) : undefined;
+    return {
+      ...e,
+      vehicleMake: v?.make ?? null,
+      vehicleModel: v?.model ?? null,
+      vehicleRegistration: v?.registrationNumber ?? null,
+    };
+  });
 
   res.json(
     rows.map((r) => ({

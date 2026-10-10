@@ -28,7 +28,6 @@
   // SENDGRID_API_KEY, CRON_SECRET, RAPID_CAR_CHECK_API_KEY, FIRECRAWL_API_KEY) are set
   // with `wrangler secret put` or in the Cloudflare dashboard.
   "vars": {
-    "DB_SCOPE": "request",
     "APP_URL": "https://cardealerstockbook.racecargraphics.uk",
     "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
     "STORAGE_BUCKET": "stock-book",

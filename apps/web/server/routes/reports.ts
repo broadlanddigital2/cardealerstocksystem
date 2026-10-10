@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { eq, and, desc, isNotNull } from "drizzle-orm";
+import { eq, and, desc, isNotNull } from "@workspace/db";
 import { db, vehiclesTable, depositRefundsTable } from "@workspace/db";
 import { requireAdmin } from "../middlewares/requireAuth";
 import { serializeVehicle } from "../lib/vehicleSerializer";

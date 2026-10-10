@@ -1,6 +1,6 @@
 import { Router } from "../http";
-import { and, eq, desc, sql, ne } from "drizzle-orm";
-import { db, vehiclesTable, invoicesTable, dealerSettingsTable, depositRefundsTable } from "@workspace/db";
+import { and, eq, desc, ne, or, gte, lte, equalsIgnoreCase, containsIgnoreCase } from "@workspace/db";
+import { db, vehiclesTable, invoicesTable, dealerSettingsTable, depositRefundsTable, type Condition } from "@workspace/db";
 import {
   CreateVehicleBody,
   UpdateVehicleBody,
@@ -241,25 +241,31 @@ router.get("/vehicles", async (req, res): Promise<void> => {
     party,
   } = req.query as Record<string, string | undefined>;
 
-  const conditions = [eq(vehiclesTable.userId, userId)];
+  const conditions: Condition[] = [eq(vehiclesTable.userId, userId)];
   if (status) conditions.push(eq(vehiclesTable.status, status));
-  if (dateFrom) conditions.push(sql`${vehiclesTable.purchaseDate} >= ${dateFrom}`);
-  if (dateTo) conditions.push(sql`${vehiclesTable.purchaseDate} <= ${dateTo}`);
+  if (dateFrom) conditions.push(gte(vehiclesTable.purchaseDate, dateFrom));
+  if (dateTo) conditions.push(lte(vehiclesTable.purchaseDate, dateTo));
   if (registrationNumber)
     conditions.push(
-      sql`lower(${vehiclesTable.registrationNumber}) like ${"%" + registrationNumber.toLowerCase() + "%"}`,
+      containsIgnoreCase(vehiclesTable.registrationNumber, registrationNumber),
     );
   if (stockNumber)
     conditions.push(
-      sql`lower(${vehiclesTable.stockNumber}) like ${"%" + stockNumber.toLowerCase() + "%"}`,
+      containsIgnoreCase(vehiclesTable.stockNumber, stockNumber),
     );
   if (makeModel)
     conditions.push(
-      sql`(lower(${vehiclesTable.make}) like ${"%" + makeModel.toLowerCase() + "%"} or lower(${vehiclesTable.model}) like ${"%" + makeModel.toLowerCase() + "%"})`,
+      or(
+        containsIgnoreCase(vehiclesTable.make, makeModel),
+        containsIgnoreCase(vehiclesTable.model, makeModel),
+      ),
     );
   if (party)
     conditions.push(
-      sql`(lower(${vehiclesTable.sellerName}) like ${"%" + party.toLowerCase() + "%"} or lower(coalesce(${vehiclesTable.buyerName}, '')) like ${"%" + party.toLowerCase() + "%"})`,
+      or(
+        containsIgnoreCase(vehiclesTable.sellerName, party),
+        containsIgnoreCase(vehiclesTable.buyerName, party),
+      ),
     );
 
   const rows = await db
@@ -293,7 +299,7 @@ router.post("/vehicles", async (req, res): Promise<void> => {
     .where(
       and(
         eq(vehiclesTable.userId, userId),
-        sql`lower(${vehiclesTable.registrationNumber}) = ${data.registrationNumber.toLowerCase()}`,
+        equalsIgnoreCase(vehiclesTable.registrationNumber, data.registrationNumber),
         ne(vehiclesTable.status, "sold"),
       ),
     )
@@ -426,7 +432,7 @@ router.post("/vehicles/import", async (req, res): Promise<void> => {
         .where(
           and(
             eq(vehiclesTable.userId, userId),
-            sql`lower(${vehiclesTable.registrationNumber}) = ${v.registrationNumber.toLowerCase()}`,
+            equalsIgnoreCase(vehiclesTable.registrationNumber, v.registrationNumber),
             ne(vehiclesTable.status, "sold"),
           ),
         )
@@ -618,7 +624,7 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
       .where(
         and(
           eq(vehiclesTable.userId, userId),
-          sql`lower(${vehiclesTable.registrationNumber}) = ${effRegistration.toLowerCase()}`,
+          equalsIgnoreCase(vehiclesTable.registrationNumber, effRegistration),
           ne(vehiclesTable.status, "sold"),
           ne(vehiclesTable.id, params.data.id),
         ),

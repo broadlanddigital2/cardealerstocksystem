@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc } from "@workspace/db";
 import { db, vehiclesTable, dealerSettingsTable, invoicesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { computeDashboardSummary } from "@workspace/report-calc";

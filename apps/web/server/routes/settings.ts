@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 import { db, dealerSettingsTable } from "@workspace/db";
 import { UpdateSettingsBody } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middlewares/requireAuth";

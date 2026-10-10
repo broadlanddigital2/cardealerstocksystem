@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { and, eq, ne, sql, like } from "drizzle-orm";
+import { and, eq, ne, like, equalsIgnoreCase } from "@workspace/db";
 import { z } from "zod/v4";
 import { db, vehiclesTable, dealerSettingsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -357,7 +357,7 @@ router.post("/cazoo/import", async (req, res): Promise<void> => {
     .where(
       and(
         eq(vehiclesTable.userId, userId),
-        sql`lower(${vehiclesTable.registrationNumber}) = ${registrationNumber.toLowerCase()}`,
+        equalsIgnoreCase(vehiclesTable.registrationNumber, registrationNumber),
         ne(vehiclesTable.status, "sold"),
       ),
     )

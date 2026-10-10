@@ -1,17 +1,15 @@
-import { withRequestDb } from "@workspace/db";
 import { createRequest, createResponse } from "./http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { getSessionUser } from "./lib/supabaseAuth";
 import { rememberSessionEmail } from "./middlewares/requireAuth";
-import { requestDbConnectionString } from "./lib/dbConnection";
 
 /**
  * Entry point for every /api/* request (wired up in app/api/[[...path]]/route.ts).
  * Resolves the Supabase Auth session, then runs the Express-style route modules.
  */
 export async function handleApiRequest(raw: Request): Promise<Response> {
-  return withRequestDb(async () => {
+  {
     const req = await createRequest(raw, "/api");
     const res = createResponse();
     try {
@@ -39,9 +37,6 @@ export async function handleApiRequest(raw: Request): Promise<Response> {
         );
       }
     }
-    const out = res.toResponse();
-    // The DB pool for this request closes when withRequestDb returns, so make
-    // sure any streamed body that depends on it has been fully produced first.
-    return out;
-  }, { connectionString: requestDbConnectionString() });
+    return res.toResponse();
+  }
 }
