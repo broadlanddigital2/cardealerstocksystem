@@ -84,7 +84,7 @@ export function SignInForm() {
       setEmail(address);
       setCode("");
       setStep("code");
-      setNotice(`If ${address} has been invited, a 6-digit code is on its way. It expires in 1 hour.`);
+      setNotice(`If ${address} has been invited, a sign-in code is on its way. It expires in 1 hour.`);
     } catch {
       setError("We couldn't send a code. Check your connection and try again.");
     } finally {
@@ -95,8 +95,8 @@ export function SignInForm() {
   async function verifyCode(e: FormEvent) {
     e.preventDefault();
     const token = code.replace(/\D/g, "");
-    if (token.length !== 6) {
-      setError("Enter the 6-digit code from the email.");
+    if (token.length < 6 || token.length > 10) {
+      setError("Enter the code from the email.");
       return;
     }
     setBusy(true);
@@ -127,23 +127,23 @@ export function SignInForm() {
       >
         <form onSubmit={verifyCode} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="code">6-digit code</Label>
+            <Label htmlFor="code">Sign-in code</Label>
             <Input
               id="code"
               inputMode="numeric"
               autoComplete="one-time-code"
               pattern="[0-9 ]*"
-              maxLength={7}
+              maxLength={10}
               autoFocus
               required
-              placeholder="123456"
-              className="text-center text-2xl tracking-[0.5em] font-semibold"
+              placeholder="12345678"
+              className="text-center text-2xl tracking-[0.4em] font-semibold"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
             />
           </div>
           <ErrorText message={error} />
-          <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
+          <Button type="submit" className="w-full" disabled={busy || code.length < 6}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Sign in
           </Button>
           <button
@@ -160,7 +160,7 @@ export function SignInForm() {
   }
 
   return (
-    <AuthCard title="Sign in" subtitle="We'll email you a 6-digit code — no password needed.">
+    <AuthCard title="Sign in" subtitle="We'll email you a sign-in code — no password needed.">
       <form onSubmit={requestCode} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email address</Label>
