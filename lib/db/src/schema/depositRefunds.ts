@@ -34,7 +34,7 @@ export const depositRefundsTable = pgTable(
     index("deposit_refunds_user_id_idx").on(table.userId),
     index("deposit_refunds_vehicle_id_idx").on(table.vehicleId),
   ],
-);
+).enableRLS();
 
 export const insertDepositRefundSchema = createInsertSchema(
   depositRefundsTable,

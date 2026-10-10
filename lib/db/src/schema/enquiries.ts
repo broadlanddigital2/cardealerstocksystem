@@ -28,7 +28,7 @@ export const enquiriesTable = pgTable(
       .defaultNow(),
   },
   (table) => [index("enquiries_user_id_idx").on(table.userId)],
-);
+).enableRLS();
 
 export const insertEnquirySchema = createInsertSchema(enquiriesTable).omit({
   id: true,

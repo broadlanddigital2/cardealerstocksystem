@@ -19,7 +19,7 @@ export const sellersTable = pgTable("sellers", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}).enableRLS();
 
 export const insertSellerSchema = createInsertSchema(sellersTable).omit({
   id: true,

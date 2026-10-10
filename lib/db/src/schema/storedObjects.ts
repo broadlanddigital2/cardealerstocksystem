@@ -13,7 +13,7 @@ export const storedObjectsTable = pgTable("stored_objects", {
   contentType: text("content_type"),
   size: integer("size"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}).enableRLS();
 
 export type StoredObject = typeof storedObjectsTable.$inferSelect;
 
@@ -27,4 +27,4 @@ export const systemStateTable = pgTable("system_state", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}).enableRLS();
