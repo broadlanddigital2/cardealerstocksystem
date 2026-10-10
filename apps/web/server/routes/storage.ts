@@ -100,8 +100,15 @@ router.post(
     const objectPath = `/objects/uploads/${objectId}`;
     let uploadURL: string;
     try {
-      // Browser PUTs the file straight to Supabase Storage via this signed URL.
-      uploadURL = await objectStorageService.createSignedUploadUrl(objectId);
+      // Supabase issues a signed, single-use upload token for this object. The
+      // browser PUTs to our own same-origin route below, which forwards the
+      // bytes to Supabase. (Uploading cross-origin straight to Supabase works,
+      // but the browser hides the ETag header the upload widget waits for.)
+      const signed = new URL(await objectStorageService.createSignedUploadUrl(objectId));
+      const token = signed.searchParams.get("token") ?? "";
+      const protocol = req.get("x-forwarded-proto") ?? req.protocol;
+      const host = req.get("x-forwarded-host") ?? req.get("host") ?? "";
+      uploadURL = `${protocol}://${host}/api/storage/uploads/direct/${objectId}?token=${encodeURIComponent(token)}`;
     } catch (err) {
       req.log.error({ err }, "Failed to create signed upload URL");
       res.status(500).json({ error: "Uploads are not available right now." });
@@ -111,6 +118,47 @@ router.post(
     res.json({ uploadURL, objectPath, metadata: { name, size, contentType } });
   },
 );
+
+/**
+ * PUT /storage/uploads/direct/:objectId?token=…
+ *
+ * Same-origin upload endpoint. The Supabase-signed token (from request-url) is
+ * the credential — it only allows writing this one object, once, for a short
+ * time. Enforces the size/type limits, forwards the bytes to Supabase Storage
+ * and replies with an ETag so the upload widget registers success.
+ */
+router.put("/storage/uploads/direct/:objectId", async (req: Request, res: Response) => {
+  const objectId = req.params.objectId ?? "";
+  const token = req.query.token ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(objectId) || !token) {
+    res.status(400).json({ error: "Invalid upload link" });
+    return;
+  }
+  const contentType = (req.get("content-type") ?? "").split(";")[0]!.trim();
+  if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(contentType)) {
+    res.status(400).json({ error: "Unsupported file type." });
+    return;
+  }
+  const declared = Number(req.get("content-length") ?? "0");
+  if (declared > MAX_UPLOAD_BYTES) {
+    res.status(413).json({ error: "File too large" });
+    return;
+  }
+  const body = await req.raw.arrayBuffer();
+  if (body.byteLength > MAX_UPLOAD_BYTES) {
+    res.status(413).json({ error: "File too large" });
+    return;
+  }
+  try {
+    await objectStorageService.uploadWithSignedToken(objectId, token, contentType, body);
+  } catch (err) {
+    req.log.error({ err }, "Error forwarding upload to storage");
+    res.status(502).json({ error: "Upload failed" });
+    return;
+  }
+  res.setHeader("ETag", `"${objectId}"`);
+  res.status(200).json({ ok: true, objectPath: `/objects/uploads/${objectId}` });
+});
 
 /**
  * GET /storage/public-objects/*

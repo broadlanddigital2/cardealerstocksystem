@@ -85,6 +85,23 @@ export class ObjectStorageService {
     return `${url}/storage/v1${data.url}`;
   }
 
+  /** Upload bytes using a Supabase signed-upload token (browser uploads). */
+  async uploadWithSignedToken(
+    objectId: string,
+    token: string,
+    contentType: string,
+    body: ArrayBuffer,
+  ): Promise<void> {
+    const { url, bucket } = config();
+    const resp = await fetch(
+      `${url}/storage/v1/object/upload/sign/${bucket}/${encodeKey(this.keyFor(objectId))}?token=${encodeURIComponent(token)}`,
+      { method: "PUT", headers: { "Content-Type": contentType, "x-upsert": "false" }, body },
+    );
+    if (!resp.ok) {
+      throw new Error(`Signed upload failed (${resp.status}): ${(await resp.text()).slice(0, 300)}`);
+    }
+  }
+
   /** Upload bytes server-side (used by the Cazoo photo import). */
   async uploadObject(
     objectId: string,
