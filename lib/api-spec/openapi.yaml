@@ -1,0 +1,2374 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: vehicles
+    description: Vehicle stock book operations
+  - name: dashboard
+    description: Dashboard summary operations
+  - name: settings
+    description: Dealer settings operations
+  - name: invoices
+    description: Sales invoice operations
+  - name: reports
+    description: Report and export data operations
+  - name: Storage
+    description: Object storage upload and serving endpoints.
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /vehicle-lookup:
+    post:
+      operationId: lookupVehicle
+      tags: [vehicles]
+      summary: Look up registration details using Rapid Car Check
+      description: Available to all invited staff. Returns form suggestions only; never saves or publishes stock.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleLookupInput"
+      responses:
+        "200":
+          description: Available vehicle information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleLookup"
+        "400":
+          description: Invalid registration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Invited staff only
+        "404":
+          description: Vehicle not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Lookup rate or provider allowance exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Invalid response from provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Lookup not configured or temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: Provider timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /vehicles:
+    get:
+      operationId: listVehicles
+      tags: [vehicles]
+      summary: List vehicles
+      description: List all vehicles with optional filters.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [in_stock, reserved, sold, disposed, returned]
+        - name: dateFrom
+          in: query
+          required: false
+          description: Filter by purchase date on or after (YYYY-MM-DD).
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          required: false
+          description: Filter by purchase date on or before (YYYY-MM-DD).
+          schema:
+            type: string
+        - name: registrationNumber
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: stockNumber
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: makeModel
+          in: query
+          required: false
+          description: Search make or model.
+          schema:
+            type: string
+        - name: party
+          in: query
+          required: false
+          description: Search seller or buyer name.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Add a purchased vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleInput"
+      responses:
+        "201":
+          description: Vehicle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      summary: Get a vehicle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      summary: Update a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleUpdate"
+      responses:
+        "200":
+          description: Updated vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteVehicle
+      tags: [vehicles]
+      summary: Delete a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /vehicles/{id}/sale:
+    post:
+      operationId: recordSale
+      tags: [vehicles]
+      summary: Record a sale against a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleInput"
+      responses:
+        "200":
+          description: Vehicle marked as sold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /vehicles/{id}/refund-deposit:
+    post:
+      operationId: refundHoldingDeposit
+      tags: [vehicles]
+      summary: Refund a holding deposit and return the vehicle to stock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deposit refunded; vehicle back in stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /vehicles/{id}/holding-deposit:
+    post:
+      operationId: recordHoldingDeposit
+      tags: [vehicles]
+      summary: Record a holding deposit and reserve a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HoldingDepositInput"
+      responses:
+        "200":
+          description: Vehicle reserved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /vehicles/import:
+    post:
+      operationId: importVehicles
+      tags: [vehicles]
+      summary: Import opening stock
+      description: Bulk-import opening stock vehicles from a parsed CSV.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportStockInput"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Dashboard summary figures
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get dealer settings
+      responses:
+        "200":
+          description: Dealer settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerSettings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update dealer settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerSettingsInput"
+      responses:
+        "200":
+          description: Updated dealer settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerSettings"
+
+  /finance-companies:
+    get:
+      operationId: listFinanceCompanies
+      tags: [finance-companies]
+      summary: List finance companies
+      description: List the dealer's saved finance companies.
+      responses:
+        "200":
+          description: List of finance companies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FinanceCompany"
+    post:
+      operationId: createFinanceCompany
+      tags: [finance-companies]
+      summary: Add a finance company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCompanyInput"
+      responses:
+        "201":
+          description: Finance company created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCompany"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /finance-companies/{id}:
+    patch:
+      operationId: updateFinanceCompany
+      tags: [finance-companies]
+      summary: Update a finance company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCompanyUpdate"
+      responses:
+        "200":
+          description: Updated finance company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCompany"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteFinanceCompany
+      tags: [finance-companies]
+      summary: Delete a finance company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /users:
+    get:
+      operationId: listAppUsers
+      tags: [users]
+      summary: List app users
+      description: List invited users and their permission level (admin only).
+      responses:
+        "200":
+          description: List of app users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppUser"
+    post:
+      operationId: createAppUser
+      tags: [users]
+      summary: Invite a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppUserInput"
+      responses:
+        "201":
+          description: User invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUser"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /users/{id}:
+    patch:
+      operationId: updateAppUser
+      tags: [users]
+      summary: Change a user's permission level
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppUserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUser"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteAppUser
+      tags: [users]
+      summary: Remove a user's access
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /sellers:
+    get:
+      operationId: listSellers
+      tags: [sellers]
+      summary: List sellers
+      description: List the dealer's saved sellers (suppliers they buy from).
+      responses:
+        "200":
+          description: List of sellers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Seller"
+    post:
+      operationId: createSeller
+      tags: [sellers]
+      summary: Add a seller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SellerInput"
+      responses:
+        "201":
+          description: Seller created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seller"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /sellers/{id}:
+    patch:
+      operationId: updateSeller
+      tags: [sellers]
+      summary: Update a seller
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SellerUpdate"
+      responses:
+        "200":
+          description: Updated seller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seller"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteSeller
+      tags: [sellers]
+      summary: Delete a seller
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /cash-expenses:
+    get:
+      operationId: listCashExpenses
+      tags: [cash-expenses]
+      summary: List cash expenses
+      description: List the dealer's cash expenses (cash paid out).
+      responses:
+        "200":
+          description: List of cash expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashExpense"
+    post:
+      operationId: createCashExpense
+      tags: [cash-expenses]
+      summary: Add a cash expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashExpenseInput"
+      responses:
+        "201":
+          description: Cash expense created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashExpense"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /cash-expenses/{id}:
+    delete:
+      operationId: deleteCashExpense
+      tags: [cash-expenses]
+      summary: Delete a cash expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List sales invoices
+      responses:
+        "200":
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+
+  /invoices/next-number:
+    get:
+      operationId: getNextInvoiceNumber
+      tags: [invoices]
+      summary: Get the next auto-generated sales invoice number
+      responses:
+        "200":
+          description: Next invoice number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextInvoiceNumber"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get an invoice by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /vehicles/{id}/invoice:
+    get:
+      operationId: getVehicleInvoice
+      tags: [invoices]
+      summary: Get the invoice for a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createVehicleInvoice
+      tags: [invoices]
+      summary: Create a sales invoice for a sold vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceInput"
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /reports/stock:
+    get:
+      operationId: getStockReport
+      tags: [reports]
+      summary: Stock list at a selected date
+      description: Vehicles that were in stock on the selected date.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: The selected date (YYYY-MM-DD).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vehicles in stock at the date
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+
+  /reports/purchases:
+    get:
+      operationId: getPurchasesReport
+      tags: [reports]
+      summary: Purchases up to a date or for a date range
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Start date (YYYY-MM-DD).
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: End date or up-to date (YYYY-MM-DD).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Purchases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+
+  /reports/sales:
+    get:
+      operationId: getSalesReport
+      tags: [reports]
+      summary: Sales up to a date or for a date range
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Start date (YYYY-MM-DD).
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: End date or up-to date (YYYY-MM-DD).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+
+  /reports/deposits:
+    get:
+      operationId: getDepositsReport
+      tags: [reports]
+      summary: Holding deposits received and refunded for a date range
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Start date (YYYY-MM-DD).
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: End date or up-to date (YYYY-MM-DD).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deposit ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DepositReportEntry"
+
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      description: |
+        Returns a presigned GCS URL for direct upload. The client sends JSON
+        metadata here, then uploads the file directly to the returned URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      description: |
+        Unconditionally public — no authentication or ACL checks.
+        Searches PUBLIC_OBJECT_SEARCH_PATHS for the given file path.
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Relative file path within the public search paths.
+      responses:
+        '200':
+          description: Object content streamed with correct Content-Type.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Failed to serve public object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity from PRIVATE_OBJECT_DIR
+      description: |
+        Serves object entities uploaded via presigned URLs. These can optionally
+        be protected with authentication or ACL checks based on the use case.
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Object path within the private object dir (e.g. `uploads/some-uuid`).
+      responses:
+        '200':
+          description: Object content streamed with correct Content-Type.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Failed to serve object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+components:
+  schemas:
+    VehicleLookupInput:
+      type: object
+      required: [registrationNumber]
+      properties:
+        registrationNumber:
+          type: string
+          minLength: 2
+          maxLength: 12
+    VehicleLookup:
+      type: object
+      required: [registrationNumber, make, model, vin, colour, description, warnings]
+      properties:
+        registrationNumber:
+          type: string
+        make:
+          type: [string, "null"]
+        model:
+          type: [string, "null"]
+        vin:
+          type: [string, "null"]
+        colour:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        warnings:
+          type: array
+          items:
+            type: string
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    FinanceCompany:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    FinanceCompanyInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: string
+        email:
+          type: string
+
+    FinanceCompanyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: string
+        email:
+          type: string
+
+    AppUser:
+      type: object
+      required:
+        - id
+        - email
+        - role
+        - locked
+        - isSelf
+        - createdAt
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        locked:
+          type: boolean
+        isSelf:
+          type: boolean
+        createdAt:
+          type: string
+
+    AppUserInput:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 3
+        role:
+          type: string
+          enum: [admin, user]
+
+    AppUserUpdate:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum: [admin, user]
+
+    Seller:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        contactName:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        vatNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    SellerInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        contactName:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        vatNumber:
+          type: string
+        notes:
+          type: string
+
+    SellerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        contactName:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        vatNumber:
+          type: string
+        notes:
+          type: string
+
+    CashExpense:
+      type: object
+      required:
+        - id
+        - date
+        - description
+        - amount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    CashExpenseInput:
+      type: object
+      required:
+        - date
+        - description
+        - amount
+      properties:
+        date:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          minLength: 1
+        amount:
+          type: number
+
+    Vehicle:
+      type: object
+      required:
+        - id
+        - stockNumber
+        - registrationNumber
+        - make
+        - model
+        - purchaseDate
+        - purchaseType
+        - sellerName
+        - purchasePrice
+        - vatQualifying
+        - totalPurchaseCost
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        stockNumber:
+          type: string
+        purchaseNumber:
+          type: ["string", "null"]
+        registrationNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        vin:
+          type: ["string", "null"]
+        colour:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        mileageAtPurchase:
+          type: ["integer", "null"]
+        purchaseDate:
+          type: string
+        purchaseInvoiceNumber:
+          type: ["string", "null"]
+        purchaseType:
+          type: string
+          enum: [private, auction, trade, part_exchange, other, cazoo_import]
+        sellerName:
+          type: string
+        sellerAddress:
+          type: ["string", "null"]
+        purchasePrice:
+          type: number
+        purchaseNotes:
+          type: ["string", "null"]
+        purchaseDocumentReference:
+          type: ["string", "null"]
+        auctionCostNoVat:
+          type: ["number", "null"]
+        auctionCostWithVat:
+          type: ["number", "null"]
+        totalPurchaseCost:
+          type: number
+          description: Purchase price plus any no-VAT auction costs; used for margin calculations.
+        vatQualifying:
+          type: boolean
+          description: When true, the vehicle is sold under standard VAT rules (not the margin scheme); purchase price is net and a separate VAT amount applies.
+        purchaseVat:
+          type: ["number", "null"]
+          description: VAT paid on a VAT-qualifying purchase (added on top of the net purchase price).
+        saleVat:
+          type: ["number", "null"]
+          description: VAT charged on a VAT-qualifying sale (added on top of the net sale price).
+        status:
+          type: string
+          enum: [in_stock, reserved, sold, disposed, returned]
+        holdingDepositAmount:
+          type: ["number", "null"]
+        holdingDepositDate:
+          type: ["string", "null"]
+        holdingDepositReference:
+          type: ["string", "null"]
+        holdingDepositPaymentMethod:
+          type: ["string", "null"]
+        saleDate:
+          type: ["string", "null"]
+        salesInvoiceNumber:
+          type: ["string", "null"]
+        buyerName:
+          type: ["string", "null"]
+        buyerAddress:
+          type: ["string", "null"]
+        buyerEmail:
+          type: ["string", "null"]
+        buyerPhone:
+          type: ["string", "null"]
+        salePrice:
+          type: ["number", "null"]
+        mileageAtSale:
+          type: ["integer", "null"]
+        methodOfDisposal:
+          type: ["string", "null"]
+          enum: [retail_sale, trade_sale, auction, scrapped, returned, other, null]
+        saleNotes:
+          type: ["string", "null"]
+        invoiceNotes:
+          type: ["string", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        numberOfPayments:
+          type: ["integer", "null"]
+        payments:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/PaymentScheduleEntry"
+        partExchangeAllowance:
+          type: ["number", "null"]
+        partExchangeMake:
+          type: ["string", "null"]
+        partExchangeModel:
+          type: ["string", "null"]
+        partExchangeRegistration:
+          type: ["string", "null"]
+        partExchangeMileage:
+          type: ["integer", "null"]
+        partExchangeVehicleId:
+          type: ["integer", "null"]
+        margin:
+          type: ["number", "null"]
+        vatDue:
+          type: ["number", "null"]
+        netMargin:
+          type: ["number", "null"]
+        hasInvoice:
+          type: boolean
+        askingPrice:
+          type: ["number", "null"]
+        marketingDescription:
+          type: ["string", "null"]
+        published:
+          type: boolean
+        showroomSold:
+          type: boolean
+        showroomRemoveAt:
+          type: ["string", "null"]
+        photoUrls:
+          type: ["array", "null"]
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    PaymentScheduleEntry:
+      type: object
+      properties:
+        date:
+          type: string
+        amount:
+          type: number
+          minimum: 0
+        paymentMethod:
+          type: ["string", "null"]
+        type:
+          type: ["string", "null"]
+
+    VehicleInput:
+      type: object
+      required:
+        - registrationNumber
+        - make
+        - model
+        - purchaseDate
+        - purchaseType
+        - sellerName
+        - purchasePrice
+      properties:
+        stockNumber:
+          type: string
+          description: Optional. Auto-generated as the next sequence number if omitted.
+        registrationNumber:
+          type: string
+          minLength: 1
+        make:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        vin:
+          type: string
+        colour:
+          type: string
+        description:
+          type: string
+        mileageAtPurchase:
+          type: integer
+          minimum: 0
+        purchaseDate:
+          type: string
+          minLength: 1
+        purchaseInvoiceNumber:
+          type: string
+        purchaseType:
+          type: string
+          enum: [private, auction, trade, part_exchange, other, cazoo_import]
+        sellerName:
+          type: string
+          minLength: 1
+        sellerAddress:
+          type: string
+        purchasePrice:
+          type: number
+          minimum: 0
+        purchaseNotes:
+          type: string
+        purchaseDocumentReference:
+          type: string
+        auctionCostNoVat:
+          type: number
+          minimum: 0
+        auctionCostWithVat:
+          type: number
+          minimum: 0
+        vatQualifying:
+          type: boolean
+        purchaseVat:
+          type: number
+          minimum: 0
+        askingPrice:
+          type: number
+          minimum: 0
+        marketingDescription:
+          type: string
+        published:
+          type: boolean
+        showroomSold:
+          type: boolean
+        photoUrls:
+          type: array
+          items:
+            type: string
+
+    VehicleUpdate:
+      type: object
+      properties:
+        stockNumber:
+          type: string
+        registrationNumber:
+          type: string
+          minLength: 1
+        make:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        vin:
+          type: string
+        colour:
+          type: string
+        description:
+          type: string
+        mileageAtPurchase:
+          type: integer
+          minimum: 0
+        purchaseDate:
+          type: string
+          minLength: 1
+        purchaseInvoiceNumber:
+          type: string
+        purchaseType:
+          type: string
+          enum: [private, auction, trade, part_exchange, other, cazoo_import]
+        sellerName:
+          type: string
+          minLength: 1
+        sellerAddress:
+          type: string
+        purchasePrice:
+          type: number
+          minimum: 0
+        purchaseNotes:
+          type: string
+        purchaseDocumentReference:
+          type: string
+        auctionCostNoVat:
+          type: number
+          minimum: 0
+        auctionCostWithVat:
+          type: number
+          minimum: 0
+        vatQualifying:
+          type: boolean
+        purchaseVat:
+          type: ["number", "null"]
+          minimum: 0
+        saleVat:
+          type: ["number", "null"]
+          minimum: 0
+        status:
+          type: string
+          enum: [in_stock, reserved, sold, disposed, returned]
+        saleDate:
+          type: string
+        salesInvoiceNumber:
+          type: string
+        buyerName:
+          type: string
+        buyerAddress:
+          type: string
+        buyerEmail:
+          type: ["string", "null"]
+        buyerPhone:
+          type: ["string", "null"]
+        salePrice:
+          type: number
+          minimum: 0
+        mileageAtSale:
+          type: integer
+          minimum: 0
+        methodOfDisposal:
+          type: string
+          enum: [retail_sale, trade_sale, auction, scrapped, returned, other]
+        saleNotes:
+          type: string
+        invoiceNotes:
+          type: ["string", "null"]
+        paymentMethod:
+          type: string
+        numberOfPayments:
+          type: ["integer", "null"]
+          minimum: 1
+        payments:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/PaymentScheduleEntry"
+        partExchangeAllowance:
+          type: number
+          minimum: 0
+        partExchangeMake:
+          type: ["string", "null"]
+        partExchangeModel:
+          type: ["string", "null"]
+        partExchangeRegistration:
+          type: ["string", "null"]
+        partExchangeMileage:
+          type: ["integer", "null"]
+          minimum: 0
+        extras:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/InvoiceExtra"
+        extrasOnFinanceInvoice:
+          type: boolean
+          description: When true, extras are billed on the finance/vehicle invoice rather than a separate extras invoice.
+        financeCompanyName:
+          type: ["string", "null"]
+        financeCompanyAddress:
+          type: ["string", "null"]
+        financeCompanyEmail:
+          type: ["string", "null"]
+        askingPrice:
+          type: ["number", "null"]
+          minimum: 0
+        marketingDescription:
+          type: ["string", "null"]
+        published:
+          type: boolean
+        showroomSold:
+          type: boolean
+        photoUrls:
+          type: ["array", "null"]
+          items:
+            type: string
+
+    SaleInput:
+      type: object
+      required:
+        - saleDate
+        - salesInvoiceNumber
+        - buyerName
+        - buyerAddress
+        - salePrice
+      properties:
+        saleDate:
+          type: string
+          minLength: 1
+        salesInvoiceNumber:
+          type: string
+          minLength: 1
+        buyerName:
+          type: string
+          minLength: 1
+        buyerAddress:
+          type: string
+          minLength: 1
+        buyerEmail:
+          type: string
+        buyerPhone:
+          type: string
+        salePrice:
+          type: number
+          minimum: 0
+        saleVat:
+          type: number
+          minimum: 0
+        mileageAtSale:
+          type: integer
+          minimum: 0
+        methodOfDisposal:
+          type: string
+          enum: [retail_sale, trade_sale, auction, scrapped, returned, other]
+        saleNotes:
+          type: string
+        invoiceNotes:
+          type: ["string", "null"]
+        paymentMethod:
+          type: string
+        numberOfPayments:
+          type: integer
+          minimum: 1
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentScheduleEntry"
+        partExchangeAllowance:
+          type: number
+          minimum: 0
+        partExchangeMake:
+          type: string
+        partExchangeModel:
+          type: string
+        partExchangeRegistration:
+          type: string
+        partExchangeMileage:
+          type: integer
+          minimum: 0
+
+    HoldingDepositInput:
+      type: object
+      required:
+        - holdingDepositAmount
+        - holdingDepositDate
+        - buyerName
+        - buyerAddress
+      properties:
+        holdingDepositAmount:
+          type: number
+          minimum: 0
+        holdingDepositDate:
+          type: string
+          minLength: 1
+        buyerName:
+          type: string
+          minLength: 1
+        buyerAddress:
+          type: string
+          minLength: 1
+        holdingDepositPaymentMethod:
+          type: string
+
+    DepositReportEntry:
+      type: object
+      required:
+        - id
+        - type
+        - vehicleId
+        - stockNumber
+        - registrationNumber
+        - make
+        - model
+        - amount
+        - date
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [received, refunded]
+        vehicleId:
+          type: integer
+        stockNumber:
+          type: string
+        registrationNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        buyerName:
+          type: string
+          nullable: true
+        reference:
+          type: string
+          nullable: true
+        amount:
+          type: number
+        date:
+          type: string
+
+    ImportStockInput:
+      type: object
+      required:
+        - vehicles
+      properties:
+        vehicles:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleInput"
+
+    ImportResult:
+      type: object
+      required:
+        - imported
+        - skipped
+        - errors
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    DashboardSummary:
+      type: object
+      required:
+        - inStockCount
+        - soldThisMonthCount
+        - totalPurchasesThisMonth
+        - totalSalesThisMonth
+        - totalMarginThisMonth
+        - netMarginThisMonth
+        - vatDueThisMonth
+        - vatDueThisQuarter
+        - standardVatThisQuarter
+        - vatQuarterLabel
+        - totalStockValue
+        - recentActivity
+        - salesThisMonthDetail
+        - netMarginThisMonthDetail
+        - vatThisMonthDetail
+        - vatThisQuarterDetail
+        - stockDetail
+      properties:
+        inStockCount:
+          type: integer
+        soldThisMonthCount:
+          type: integer
+        totalPurchasesThisMonth:
+          type: number
+        totalSalesThisMonth:
+          type: number
+        totalMarginThisMonth:
+          type: number
+        netMarginThisMonth:
+          type: number
+        vatDueThisMonth:
+          type: number
+        vatDueThisQuarter:
+          type: number
+        standardVatThisQuarter:
+          type: number
+        vatQuarterLabel:
+          type: string
+        totalStockValue:
+          type: number
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+        salesThisMonthDetail:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDetailItem"
+        netMarginThisMonthDetail:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDetailItem"
+        vatThisMonthDetail:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDetailItem"
+        vatThisQuarterDetail:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDetailItem"
+        stockDetail:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDetailItem"
+
+    DashboardDetailItem:
+      type: object
+      required:
+        - id
+        - label
+        - sublabel
+        - amount
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        sublabel:
+          type: ["string", "null"]
+        amount:
+          type: number
+
+    ActivityItem:
+      type: object
+      required:
+        - id
+        - type
+        - vehicleId
+        - stockNumber
+        - registrationNumber
+        - description
+        - date
+        - amount
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [purchase, sale]
+        vehicleId:
+          type: integer
+        stockNumber:
+          type: string
+        registrationNumber:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+        amount:
+          type: number
+
+    DealerSettings:
+      type: object
+      required:
+        - id
+        - businessName
+        - defaultInvoiceWording
+      properties:
+        id:
+          type: integer
+        businessName:
+          type: string
+        address:
+          type: ["string", "null"]
+        vatNumber:
+          type: ["string", "null"]
+        businessType:
+          type: ["string", "null"]
+        companyName:
+          type: ["string", "null"]
+        companyNumber:
+          type: ["string", "null"]
+        placeOfRegistration:
+          type: ["string", "null"]
+        registeredOfficeAddress:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        bankAccountName:
+          type: ["string", "null"]
+        bankName:
+          type: ["string", "null"]
+        bankSortCode:
+          type: ["string", "null"]
+        bankAccountNumber:
+          type: ["string", "null"]
+        logoPath:
+          type: ["string", "null"]
+        defaultInvoiceWording:
+          type: string
+        marginSchemeWording:
+          type: ["string", "null"]
+        invoiceAccentColour:
+          type: ["string", "null"]
+        vatQuarter:
+          type: ["string", "null"]
+        vatRate:
+          type: ["string", "null"]
+        carSalesCode:
+          type: ["string", "null"]
+        vatQualifyingCode:
+          type: ["string", "null"]
+        otherSalesCode:
+          type: ["string", "null"]
+        carPurchasesCode:
+          type: ["string", "null"]
+        stockCode:
+          type: ["string", "null"]
+        auctionCostNoVatCode:
+          type: ["string", "null"]
+        auctionCostVatCode:
+          type: ["string", "null"]
+        cashOpeningBalance:
+          type: ["number", "null"]
+        financeProvided:
+          type: boolean
+        financeFrnNumber:
+          type: ["string", "null"]
+        financeWording:
+          type: ["string", "null"]
+        showroomEnabled:
+          type: boolean
+        showroomHeadline:
+          type: ["string", "null"]
+        showroomIntro:
+          type: ["string", "null"]
+        showroomAboutTitle:
+          type: ["string", "null"]
+        showroomFeatures:
+          type: ["array", "null"]
+          items:
+            type: object
+            required: [title, body]
+            properties:
+              title:
+                type: string
+              body:
+                type: string
+              iconPath:
+                type: string
+        showroomReviews:
+          type: ["array", "null"]
+          items:
+            type: object
+            required: [author, rating, text]
+            properties:
+              author:
+                type: string
+              rating:
+                type: number
+              text:
+                type: string
+              date:
+                type: string
+        showroomBgColour:
+          type: ["string", "null"]
+        showroomBgTextColour:
+          type: ["string", "null"]
+
+    DealerSettingsInput:
+      type: object
+      properties:
+        businessName:
+          type: string
+        address:
+          type: string
+        vatNumber:
+          type: string
+        businessType:
+          type: string
+        companyName:
+          type: string
+        companyNumber:
+          type: string
+        placeOfRegistration:
+          type: string
+        registeredOfficeAddress:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        bankAccountName:
+          type: string
+        bankName:
+          type: string
+        bankSortCode:
+          type: string
+        bankAccountNumber:
+          type: string
+        logoPath:
+          type: string
+        defaultInvoiceWording:
+          type: string
+        marginSchemeWording:
+          type: string
+        invoiceAccentColour:
+          type: string
+        vatQuarter:
+          type: string
+          enum: [stagger_1, stagger_2, stagger_3, monthly, annual]
+        vatRate:
+          type: string
+        carSalesCode:
+          type: string
+        vatQualifyingCode:
+          type: string
+        otherSalesCode:
+          type: string
+        carPurchasesCode:
+          type: string
+        stockCode:
+          type: string
+        auctionCostNoVatCode:
+          type: string
+        auctionCostVatCode:
+          type: string
+        cashOpeningBalance:
+          type: number
+        financeProvided:
+          type: boolean
+        financeFrnNumber:
+          type: string
+        financeWording:
+          type: string
+        showroomEnabled:
+          type: boolean
+        showroomHeadline:
+          type: string
+        showroomIntro:
+          type: string
+        showroomAboutTitle:
+          type: string
+        showroomFeatures:
+          type: array
+          items:
+            type: object
+            required: [title, body]
+            properties:
+              title:
+                type: string
+              body:
+                type: string
+              iconPath:
+                type: string
+        showroomReviews:
+          type: array
+          items:
+            type: object
+            required: [author, rating, text]
+            properties:
+              author:
+                type: string
+              rating:
+                type: number
+              text:
+                type: string
+              date:
+                type: string
+        showroomBgColour:
+          type: string
+        showroomBgTextColour:
+          type: string
+
+    NextInvoiceNumber:
+      type: object
+      required:
+        - invoiceNumber
+      properties:
+        invoiceNumber:
+          type: string
+
+    Invoice:
+      type: object
+      required:
+        - id
+        - vehicleId
+        - invoiceNumber
+        - invoiceDate
+        - customerName
+        - customerAddress
+        - salePrice
+        - balancePayable
+        - createdAt
+      properties:
+        id:
+          type: integer
+        vehicleId:
+          type: integer
+        invoiceNumber:
+          type: string
+        invoiceDate:
+          type: string
+        customerName:
+          type: string
+        customerAddress:
+          type: string
+        salePrice:
+          type: number
+        saleVat:
+          type: ["number", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        partExchangeAllowance:
+          type: ["number", "null"]
+        balancePayable:
+          type: number
+        holdingDeposit:
+          type: ["number", "null"]
+        extras:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/InvoiceExtra"
+        extrasOnFinanceInvoice:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        financeCompanyName:
+          type: ["string", "null"]
+        financeCompanyAddress:
+          type: ["string", "null"]
+        financeCompanyEmail:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    InvoiceExtra:
+      type: object
+      required:
+        - description
+        - amount
+      properties:
+        description:
+          type: string
+          minLength: 1
+        amount:
+          type: number
+          minimum: 0
+        vat:
+          type: number
+          minimum: 0
+        onFinanceInvoice:
+          type: boolean
+          description: When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.
+
+    InvoiceInput:
+      type: object
+      required:
+        - invoiceNumber
+        - invoiceDate
+        - customerName
+        - customerAddress
+        - salePrice
+        - balancePayable
+      properties:
+        invoiceNumber:
+          type: string
+          minLength: 1
+        invoiceDate:
+          type: string
+          minLength: 1
+        customerName:
+          type: string
+          minLength: 1
+        customerAddress:
+          type: string
+          minLength: 1
+        salePrice:
+          type: number
+          minimum: 0
+        saleVat:
+          type: number
+          minimum: 0
+        paymentMethod:
+          type: string
+        partExchangeAllowance:
+          type: number
+          minimum: 0
+        balancePayable:
+          type: number
+        holdingDeposit:
+          type: number
+          minimum: 0
+        extras:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceExtra"
+        extrasOnFinanceInvoice:
+          type: boolean
+        notes:
+          type: string
+        financeCompanyName:
+          type: string
+        financeCompanyAddress:
+          type: string
+        financeCompanyEmail:
+          type: string
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Original file name.
+        size:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+          description: File size in bytes (max 10 MB).
+        contentType:
+          type: string
+          minLength: 1
+          description: MIME type of the file (e.g. `image/jpeg`).
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          description: URL for the PUT upload (may be a server-proxied endpoint).
+        objectPath:
+          type: string
+          description: Normalized object path (e.g. `/objects/uploads/uuid`). Store this in your database.
+        metadata:
+          $ref: '#/components/schemas/UploadUrlRequest'
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

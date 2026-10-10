@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Motor Dealer Stock Book"
+version = "1.0.0"
+id = "artifacts/stock-book"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18695
+
+[services.development]
+run = "pnpm --filter @workspace/stock-book run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/stock-book", "run", "build" ]
+publicDir = "artifacts/stock-book/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18695"
+BASE_PATH = "/"

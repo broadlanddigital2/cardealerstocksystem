@@ -1,0 +1,38 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import accessRouter from "./access";
+import storageRouter from "./storage";
+import vehiclesRouter from "./vehicles";
+import dashboardRouter from "./dashboard";
+import settingsRouter from "./settings";
+import invoicesRouter from "./invoices";
+import reportsRouter from "./reports";
+import sellersRouter from "./sellers";
+import cashExpensesRouter from "./cashExpenses";
+import financeCompaniesRouter from "./financeCompanies";
+import showroomRouter from "./showroom";
+import enquiriesRouter from "./enquiries";
+import usersRouter from "./users";
+import cazooImportRouter from "./cazooImport";
+import vehicleLookupRouter from "./vehicleLookup";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(accessRouter);
+router.use(storageRouter);
+router.use(vehiclesRouter);
+router.use(dashboardRouter);
+router.use(settingsRouter);
+router.use(invoicesRouter);
+router.use(reportsRouter);
+router.use(sellersRouter);
+router.use(cashExpensesRouter);
+router.use(financeCompaniesRouter);
+router.use(showroomRouter);
+router.use(enquiriesRouter);
+router.use(usersRouter);
+router.use(cazooImportRouter);
+router.use(vehicleLookupRouter);
+
+export default router;

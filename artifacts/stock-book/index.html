@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <script>
+      // Suppress benign, non-fatal browser noise that the dev runtime-error
+      // overlay otherwise reports as a phantom "crash". This is a CLASSIC inline
+      // script on purpose: it runs during HTML parsing, before Vite's deferred
+      // module scripts (the dev client + runtime-error overlay plugin) register
+      // their own listeners. Registering first in the capture phase lets us call
+      // stopImmediatePropagation() so the overlay never sees these events.
+      //
+      // We ONLY swallow non-Error events. Genuine application errors are thrown
+      // as Error instances (the API client throws ApiError; React surfaces real
+      // render errors via the ErrorBoundary), so those still propagate normally.
+      (function () {
+        if (typeof window === "undefined") return;
+
+        // "ResizeObserver loop completed with undelivered notifications" is a
+        // harmless notification fired by libraries that resize elements inside
+        // their own observer callback (Radix UI menus/dialogs, Clerk, etc.).
+        // Deferring each callback to the next animation frame breaks the
+        // synchronous resize->observe loop so the notification is never emitted.
+        if (window.ResizeObserver) {
+          try {
+            var Native = window.ResizeObserver;
+            window.ResizeObserver = class extends Native {
+              constructor(cb) {
+                super(function (entries, observer) {
+                  window.requestAnimationFrame(function () {
+                    cb(entries, observer);
+                  });
+                });
+              }
+            };
+          } catch (e) {
+            /* non-writable; fall back to native behaviour */
+          }
+        }
+
+        window.addEventListener(
+          "error",
+          function (event) {
+            if (!(event.error instanceof Error)) {
+              console.warn("[benign-noise] suppressed window error:", event.message);
+              event.stopImmediatePropagation();
+              event.preventDefault();
+            }
+          },
+          true,
+        );
+
+        window.addEventListener(
+          "unhandledrejection",
+          function (event) {
+            if (!(event.reason instanceof Error)) {
+              console.warn("[benign-noise] suppressed promise rejection:", event.reason);
+              event.stopImmediatePropagation();
+              event.preventDefault();
+            }
+          },
+          true,
+        );
+      })();
+    </script>
+    <title>MotorMetric</title>
+    <meta name="description" content="The MotorTrade Accountants — Stock Book — built on Replit. Update this description to reflect the app." />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="The MotorTrade Accountants — Stock Book" />
+    <meta property="og:description" content="The MotorTrade Accountants — Stock Book — built on Replit. Update this description to reflect the app." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="The MotorTrade Accountants — Stock Book" />
+    <meta name="twitter:description" content="The MotorTrade Accountants — Stock Book — built on Replit. Update this description to reflect the app." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
