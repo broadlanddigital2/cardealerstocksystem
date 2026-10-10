@@ -72,9 +72,9 @@ Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2).
 
 **Supabase Auth settings** (dashboard → Authentication):
 - **URL Configuration:** Site URL = `https://cardealerstockbook.racecargraphics.uk`; Redirect URLs = `https://cardealerstockbook.racecargraphics.uk/**` and `http://localhost:3000/**`.
-- **Emails → SMTP Settings:** enable custom SMTP with SendGrid — host `smtp.sendgrid.net`, port `587`, username `apikey`, password = a SendGrid API key, sender `noreply@motormetric-mg.co.uk`, sender name `MotorMetric`. Supabase's built-in sender only delivers to your own team and is heavily rate-limited, so sign-up confirmations and password resets need this.
+- **Emails → SMTP Settings:** enable custom SMTP with SendGrid — host `smtp.sendgrid.net`, port `587`, username `apikey`, password = a SendGrid API key, sender `noreply@racecargraphics.uk`, sender name `MotorMetric`. Supabase's built-in sender only delivers to your own team and is heavily rate-limited, so sign-up confirmations and password resets need this.
 
-**SendGrid:** authenticate the `motormetric-mg.co.uk` domain (Settings → Sender Authentication) by adding the CNAME records it gives you in Cloudflare DNS, then create an API key with *Mail Send* access. The app uses SendGrid's HTTPS API (works on Workers); SMTP via `SMTP_*` remains as a fallback.
+**SendGrid:** authenticate the `racecargraphics.uk` domain (testing; switch to the dealer domain for go-live) (Settings → Sender Authentication) by adding the CNAME records it gives you in Cloudflare DNS, then create an API key with *Mail Send* access. The app uses SendGrid's HTTPS API (works on Workers); SMTP via `SMTP_*` remains as a fallback.
 
 ## Notes
 
