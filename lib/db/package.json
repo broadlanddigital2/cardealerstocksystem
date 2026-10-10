@@ -11,7 +11,7 @@
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "generate": "drizzle-kit generate --dialect postgresql --schema ./src/schema/index.ts --out ./migrations",
-    "migrate": "drizzle-kit migrate --config ./drizzle.config.ts"
+    "migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
