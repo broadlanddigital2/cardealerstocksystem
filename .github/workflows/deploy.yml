@@ -15,7 +15,7 @@ name: Deploy
 #   NEXT_PUBLIC_SHOWROOM_HOSTS
 #
 # Runtime secrets for the Worker itself (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-# SMTP_PASS, CRON_SECRET, ...) live in
+# SENDGRID_API_KEY, CRON_SECRET, ...) live in
 # Cloudflare: Workers & Pages -> cardealerstocksystem -> Settings -> Variables.
 
 on:
