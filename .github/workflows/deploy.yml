@@ -1,22 +1,12 @@
-name: Deploy
+name: Database migrations
 
-# Runs after CI passes on main:
-#   1. db       -> applies the Drizzle schema to the Supabase Postgres database
-#   2. deploy   -> builds with OpenNext and deploys the Cloudflare Worker
+# Deploys of the app itself are done by Cloudflare Workers Builds (connected to
+# this repo, like our other sites). This workflow keeps the Supabase database
+# schema in step: after CI passes on main it applies any new SQL migrations
+# from lib/db/migrations (generated from lib/db/src/schema and reviewed in PRs).
 #
-# Each job switches itself off (with a notice) until its secrets exist, so the
-# pipeline is safe to merge before the infrastructure is ready.
-#
-# Repository secrets (Settings -> Secrets and variables -> Actions):
-#   DATABASE_URL           Supabase connection string (session pooler, port 5432)
-#   CLOUDFLARE_API_TOKEN   token with "Edit Cloudflare Workers" permission
-#   CLOUDFLARE_ACCOUNT_ID  your Cloudflare account id
-# Repository variables (optional):
-#   NEXT_PUBLIC_SHOWROOM_HOSTS
-#
-# Runtime secrets for the Worker itself (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-# SENDGRID_API_KEY, CRON_SECRET, ...) live in
-# Cloudflare: Workers & Pages -> cardealerstocksystem -> Settings -> Variables.
+# Repository secret (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL   Supabase session pooler URI (port 5432)
 
 on:
   workflow_run:
@@ -26,21 +16,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-production
+  group: db-migrations
   cancel-in-progress: false
 
 permissions:
   contents: read
 
-env:
-  NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-  NEXT_PUBLIC_SHOWROOM_HOSTS: ${{ vars.NEXT_PUBLIC_SHOWROOM_HOSTS }}
-  NEXT_TELEMETRY_DISABLED: 1
-
 jobs:
-  db:
-    name: Sync database schema
+  migrate:
+    name: Apply database migrations
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: production
@@ -51,7 +35,7 @@ jobs:
         id: ready
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::notice::DATABASE_URL secret not set — skipping schema sync."
+            echo "::notice::DATABASE_URL secret not set — skipping migrations."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
@@ -69,43 +53,6 @@ jobs:
           cache: pnpm
       - if: steps.ready.outputs.ok == 'true'
         run: pnpm install --frozen-lockfile
-      # drizzle-kit push is additive here; it fails rather than silently
-      # dropping data if a change would be destructive.
-      - name: drizzle-kit push
+      - name: drizzle-kit migrate
         if: steps.ready.outputs.ok == 'true'
-        run: .github/scripts/step.sh "Database schema sync" pnpm --filter @workspace/db exec drizzle-kit push --config ./drizzle.config.ts --verbose
-
-  deploy:
-    name: Deploy to Cloudflare Workers
-    needs: db
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-    steps:
-      - name: Check secrets
-        id: ready
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set — skipping deploy."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          fi
-      - uses: actions/checkout@v4
-        if: steps.ready.outputs.ok == 'true'
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - uses: pnpm/action-setup@v4
-        if: steps.ready.outputs.ok == 'true'
-      - uses: actions/setup-node@v4
-        if: steps.ready.outputs.ok == 'true'
-        with:
-          node-version: 24
-          cache: pnpm
-      - if: steps.ready.outputs.ok == 'true'
-        run: pnpm install --frozen-lockfile
-      - name: Build and deploy
-        if: steps.ready.outputs.ok == 'true'
-        run: .github/scripts/step.sh "Cloudflare deploy" pnpm --filter @workspace/web run deploy
+        run: .github/scripts/step.sh "Database migrations" pnpm --filter @workspace/db run migrate

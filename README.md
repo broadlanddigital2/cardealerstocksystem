@@ -35,24 +35,33 @@ After changing `lib/db/src/schema`, run `pnpm --filter @workspace/db run generat
 ## Pipeline
 
 ```
-feature branch ──push──▶ CI: install → generate SQL migrations → typecheck → tests → next build → OpenNext build
+feature branch ──push──▶ GitHub Actions CI: install → generate SQL migrations → typecheck → tests → next build → OpenNext build
                          (auto-commits lockfile / new migrations back to the branch)
 pull request ───────────▶ CI must pass
-merge to main ──────────▶ CI ──▶ Deploy: drizzle-kit push to Supabase ──▶ deploy Worker to Cloudflare
+merge to main ──────────▶ Cloudflare Workers Builds: build + deploy the Worker (same as our other sites)
+                └───────▶ GitHub Actions: CI ──▶ "Database migrations" applies new lib/db/migrations to Supabase
 ```
 
-Deploy jobs skip themselves (with a notice) until their secrets exist.
+Schema changes should be additive (new tables/columns) so the app works whether the deploy or the migration lands first.
 
 ### One-time setup
+
+**Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Build** (Git repository: `broadlanddigital2/cardealerstocksystem`, branch `main`)
+
+| Setting | Value |
+|---|---|
+| Root directory | `/` |
+| Build command | *(leave blank)* |
+| Deploy command | `pnpm run deploy` |
+| Build variables | `NODE_VERSION` = `22` · `NEXT_PUBLIC_SHOWROOM_HOSTS` (optional) |
+
+Leaving the build command blank keeps the OpenNext build and deploy in one step (as in our other Workers sites).
 
 **GitHub → Settings → Secrets and variables → Actions**
 
 | Kind | Name | Value |
 |---|---|---|
-| Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare token with *Edit Cloudflare Workers* |
-| Secret | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
 | Secret | `DATABASE_URL` | Supabase **session pooler** URI (port 5432) |
-| Variable | `NEXT_PUBLIC_SHOWROOM_HOSTS` | e.g. `manorgcs.co.uk,www.manorgcs.co.uk` (optional) |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
 
