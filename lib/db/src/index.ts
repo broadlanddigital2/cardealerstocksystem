@@ -18,9 +18,11 @@ function connectionString(): string {
   return url;
 }
 
-function makePool(max: number): pg.Pool {
-  const url = connectionString();
-  const needsSsl = !/localhost|127\.0\.0\.1/.test(url) && !/sslmode=disable/.test(url);
+function makePool(max: number, override?: { connectionString: string; ssl: boolean }): pg.Pool {
+  const url = override?.connectionString ?? connectionString();
+  const needsSsl = override
+    ? override.ssl
+    : !/localhost|127\.0\.0\.1/.test(url) && !/sslmode=disable/.test(url);
   const ssl = needsSsl ? { rejectUnauthorized: false } : undefined;
   return new Pool({
     connectionString: url,
@@ -53,6 +55,8 @@ interface Scope {
 // database (health checks, static API responses) never open a connection.
 interface LazyScope {
   current: Scope | null;
+  /** e.g. a Cloudflare Hyperdrive connection string (local, no TLS needed). */
+  override?: { connectionString: string; ssl: boolean };
 }
 
 const requestScope = new AsyncLocalStorage<LazyScope>();
@@ -62,7 +66,7 @@ function current(): Scope {
   const scoped = requestScope.getStore();
   if (scoped) {
     if (!scoped.current) {
-      const p = makePool(Number(process.env.DB_POOL_MAX ?? 3));
+      const p = makePool(Number(process.env.DB_POOL_MAX ?? 3), scoped.override);
       scoped.current = { pool: p, db: drizzle(p, { schema }) };
     }
     return scoped.current;
@@ -74,9 +78,17 @@ function current(): Scope {
   return shared;
 }
 
-export async function withRequestDb<T>(fn: () => Promise<T>): Promise<T> {
+export async function withRequestDb<T>(
+  fn: () => Promise<T>,
+  options: { connectionString?: string | null } = {},
+): Promise<T> {
   if (process.env.DB_SCOPE !== "request") return fn();
-  const scope: LazyScope = { current: null };
+  const scope: LazyScope = {
+    current: null,
+    override: options.connectionString
+      ? { connectionString: options.connectionString, ssl: false }
+      : undefined,
+  };
   try {
     return await requestScope.run(scope, fn);
   } finally {

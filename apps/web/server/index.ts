@@ -4,6 +4,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { getSessionUser } from "./lib/supabaseAuth";
 import { rememberSessionEmail } from "./middlewares/requireAuth";
+import { requestDbConnectionString } from "./lib/dbConnection";
 
 /**
  * Entry point for every /api/* request (wired up in app/api/[[...path]]/route.ts).
@@ -42,5 +43,5 @@ export async function handleApiRequest(raw: Request): Promise<Response> {
     // The DB pool for this request closes when withRequestDb returns, so make
     // sure any streamed body that depends on it has been fully produced first.
     return out;
-  });
+  }, { connectionString: requestDbConnectionString() });
 }
