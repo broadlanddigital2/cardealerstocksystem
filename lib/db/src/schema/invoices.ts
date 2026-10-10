@@ -56,7 +56,7 @@ export const invoicesTable = pgTable(
       table.invoiceNumber,
     ),
   ],
-);
+).enableRLS();
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({
   id: true,

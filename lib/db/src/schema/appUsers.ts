@@ -28,7 +28,7 @@ export const appUsersTable = pgTable(
     // the DB must reject mixed-case duplicates of the same address.
     uniqueIndex("app_users_email_lower_unique").on(sql`lower(${table.email})`),
   ],
-);
+).enableRLS();
 
 export const insertAppUserSchema = createInsertSchema(appUsersTable).omit({
   id: true,

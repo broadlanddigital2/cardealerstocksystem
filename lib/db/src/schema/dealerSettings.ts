@@ -87,7 +87,7 @@ export const dealerSettingsTable = pgTable("dealer_settings", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}).enableRLS();
 
 export const insertDealerSettingsSchema = createInsertSchema(
   dealerSettingsTable,

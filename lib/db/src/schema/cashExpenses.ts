@@ -26,7 +26,7 @@ export const cashExpensesTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [index("cash_expenses_user_id_idx").on(table.userId)],
-);
+).enableRLS();
 
 export const insertCashExpenseSchema = createInsertSchema(cashExpensesTable).omit(
   {

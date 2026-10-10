@@ -109,7 +109,7 @@ export const vehiclesTable = pgTable(
       .on(table.userId, sql`lower(${table.registrationNumber})`)
       .where(sql`${table.status} <> 'sold'`),
   ],
-);
+).enableRLS();
 
 export const insertVehicleSchema = createInsertSchema(vehiclesTable).omit({
   id: true,

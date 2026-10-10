@@ -15,7 +15,7 @@ export const financeCompaniesTable = pgTable("finance_companies", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}).enableRLS();
 
 export const insertFinanceCompanySchema = createInsertSchema(
   financeCompaniesTable,
