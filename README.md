@@ -61,7 +61,7 @@ Deploy jobs skip themselves (with a notice) until their secrets exist.
 | `DATABASE_URL` | Supabase **transaction pooler** URI (port 6543) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API keys → `service_role` / secret key |
 | `CRON_SECRET` | any long random string |
-| `SMTP_PASS` | dealer mailbox password |
+| `SENDGRID_API_KEY` | SendGrid API key (Mail Send) — used for enquiry alerts, staff invites, Cazoo alerts |
 | `RAPID_CAR_CHECK_API_KEY` | optional — registration lookup |
 | `FIRECRAWL_API_KEY` | optional — Cazoo import fallback |
 | `ALLOWED_EMAILS` / `ADMIN_EMAILS` | optional backstop allowlists (comma-separated) |
@@ -70,7 +70,9 @@ Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2).
 
 **Supabase Auth settings** (dashboard → Authentication):
 - **URL Configuration:** Site URL = the live staff URL; add `https://<your-worker>.workers.dev/**`, the custom domain `/**` and `http://localhost:3000/**` to Redirect URLs.
-- **Emails → SMTP Settings:** turn on custom SMTP with the dealer mailbox (`smtp.livemail.co.uk`, port 465, `noreply@motormetric-mg.co.uk`). Supabase's built-in sender only delivers to your own team and is heavily rate-limited, so sign-up confirmations and password resets need this.
+- **Emails → SMTP Settings:** enable custom SMTP with SendGrid — host `smtp.sendgrid.net`, port `587`, username `apikey`, password = a SendGrid API key, sender `noreply@motormetric-mg.co.uk`, sender name `MotorMetric`. Supabase's built-in sender only delivers to your own team and is heavily rate-limited, so sign-up confirmations and password resets need this.
+
+**SendGrid:** authenticate the `motormetric-mg.co.uk` domain (Settings → Sender Authentication) by adding the CNAME records it gives you in Cloudflare DNS, then create an API key with *Mail Send* access. The app uses SendGrid's HTTPS API (works on Workers); SMTP via `SMTP_*` remains as a fallback.
 
 ## Notes
 

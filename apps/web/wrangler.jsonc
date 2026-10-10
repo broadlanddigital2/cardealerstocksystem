@@ -20,17 +20,16 @@
     "crons": ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"]
   },
   // Non-secret configuration. Secrets (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-  // SMTP_PASS, CRON_SECRET, RAPID_CAR_CHECK_API_KEY, FIRECRAWL_API_KEY) are set
+  // SENDGRID_API_KEY, CRON_SECRET, RAPID_CAR_CHECK_API_KEY, FIRECRAWL_API_KEY) are set
   // with `wrangler secret put` or in the Cloudflare dashboard.
   "vars": {
     "DB_SCOPE": "request",
     "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
     "STORAGE_BUCKET": "stock-book",
-    "SMTP_HOST": "smtp.livemail.co.uk",
-    "SMTP_PORT": "465",
-    "SMTP_SECURE": "true",
-    "SMTP_USER": "noreply@motormetric-mg.co.uk",
+    // Email goes out via the SendGrid API (secret: SENDGRID_API_KEY). The
+    // from-address must be a verified sender / authenticated domain in SendGrid.
     "ENQUIRY_EMAIL_FROM": "noreply@motormetric-mg.co.uk",
+    "EMAIL_FROM_NAME": "MotorMetric",
     "RAPID_CAR_CHECK_DOMAIN": "motormetric-mg.co.uk"
   }
 }

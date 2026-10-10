@@ -1,39 +1,93 @@
-import nodemailer, { type Transporter } from "nodemailer";
 import { logger } from "./logger";
 
-// Transactional email sender for dealer notifications. Emails are sent straight
-// through the dealer's own mailbox over SMTP (e.g. their Fasthosts mailbox), so
-// messages come directly from their real email address.
+// Transactional email for dealer notifications, staff invites and alerts.
 //
-// Configuration (all optional; email simply no-ops if SMTP isn't configured):
-//   SMTP_HOST  — outgoing mail server (e.g. smtp.livemail.co.uk for Fasthosts).
-//   SMTP_PORT  — outgoing port. Defaults to 587 (STARTTLS). Use 465 for SSL.
-//   SMTP_USER  — the full mailbox email address used to log in.
-//   SMTP_PASS  — the mailbox password (stored as a secret).
-//   SMTP_SECURE — "true" to force implicit TLS (set this for port 465).
-//   ENQUIRY_EMAIL_FROM — the visible "from" address. Defaults to SMTP_USER.
+// Two delivery options (all optional; email simply no-ops if neither is set):
+//
+// 1. SendGrid web API (preferred — plain HTTPS, works on Cloudflare Workers):
+//      SENDGRID_API_KEY    — API key with "Mail Send" permission (secret).
+//      ENQUIRY_EMAIL_FROM  — a sender verified in SendGrid (single sender or
+//                            authenticated domain), e.g. noreply@motormetric-mg.co.uk.
+//      EMAIL_FROM_NAME     — optional display name, e.g. "MotorMetric".
+//
+// 2. SMTP (fallback, e.g. the dealer's own mailbox):
+//      SMTP_HOST / SMTP_PORT (default 587) / SMTP_USER / SMTP_PASS /
+//      SMTP_SECURE ("true" for implicit TLS; auto for port 465).
+//    SendGrid's SMTP relay also works here: host smtp.sendgrid.net, user "apikey",
+//    password = the API key.
+
+interface OutgoingMail {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  replyTo?: string;
+}
+
+interface Transport {
+  sendMail(mail: OutgoingMail): Promise<void>;
+}
 
 function getFromAddress(): string {
   return (
     process.env.ENQUIRY_EMAIL_FROM?.trim() ||
+    process.env.EMAIL_FROM?.trim() ||
     process.env.SMTP_USER?.trim() ||
     ""
   );
 }
 
-function getTransport(): Transporter | null {
+function sendGridTransport(apiKey: string): Transport {
+  const fromName = process.env.EMAIL_FROM_NAME?.trim();
+  return {
+    async sendMail(mail) {
+      const resp = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: mail.to }] }],
+          from: fromName ? { email: mail.from, name: fromName } : { email: mail.from },
+          ...(mail.replyTo ? { reply_to: { email: mail.replyTo } } : {}),
+          subject: mail.subject,
+          content: [
+            { type: "text/plain", value: mail.text },
+            { type: "text/html", value: mail.html },
+          ],
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        // SendGrid returns a JSON list of errors (e.g. unverified sender).
+        const detail = (await resp.text().catch(() => "")).slice(0, 500);
+        throw new Error(`SendGrid send failed (${resp.status}): ${detail}`);
+      }
+    },
+  };
+}
+
+function smtpTransport(): Transport | null {
   const host = process.env.SMTP_HOST?.trim();
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS;
   if (!host || !user || !pass) return null;
   const port = Number(process.env.SMTP_PORT?.trim() || "587");
   const secure = process.env.SMTP_SECURE?.trim() === "true" || port === 465;
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-  });
+  return {
+    async sendMail(mail) {
+      const nodemailer = (await import("nodemailer")).default;
+      await nodemailer.createTransport({ host, port, secure, auth: { user, pass } }).sendMail(mail);
+    },
+  };
+}
+
+function getTransport(): Transport | null {
+  const apiKey = process.env.SENDGRID_API_KEY?.trim();
+  if (apiKey) return sendGridTransport(apiKey);
+  return smtpTransport();
 }
 
 export interface EnquiryEmailDetails {
@@ -79,7 +133,7 @@ export async function sendEnquiryNotification(
   const from = getFromAddress();
   if (!transport || !from) {
     logger.warn(
-      "SMTP not configured — skipping enquiry notification email.",
+      "Email not configured (SENDGRID_API_KEY or SMTP_*) — skipping enquiry notification email.",
     );
     return false;
   }
@@ -158,7 +212,7 @@ export async function sendCazooHealthAlert(
   const transport = getTransport();
   const from = getFromAddress();
   if (!transport || !from) {
-    logger.warn("SMTP not configured — skipping Cazoo health alert email.");
+    logger.warn("Email not configured (SENDGRID_API_KEY or SMTP_*) — skipping Cazoo health alert email.");
     return false;
   }
 
@@ -237,7 +291,7 @@ export async function sendInviteEmail(
   const transport = getTransport();
   const from = getFromAddress();
   if (!transport || !from) {
-    logger.warn("SMTP not configured — skipping staff invitation email.");
+    logger.warn("Email not configured (SENDGRID_API_KEY or SMTP_*) — skipping staff invitation email.");
     return false;
   }
 
