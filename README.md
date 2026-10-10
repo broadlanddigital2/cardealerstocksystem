@@ -2,7 +2,7 @@
 
 UK second-hand motor dealer stock book for accountants' motor-trade clients. Tracks vehicles from purchase to sale, applies the VAT Margin Scheme (Second-hand Goods) automatically, and produces branded margin-scheme invoices, reports and exports. Includes a public showroom website for the dealer.
 
-**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** (Postgres via its HTTPS API, Storage, Auth) · Supabase Auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
+**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** (Postgres via its HTTPS API, Auth) · **Cloudflare R2** (files) · Supabase Auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
 
 ## Layout
 
@@ -76,7 +76,7 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 
 Live URL (temporary): **https://cardealerstockbook.racecargraphics.uk** — set in `apps/web/wrangler.jsonc` → `routes`.
 
-Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2). Tables, RLS and the private `stock-book` storage bucket (10 MB, images only) are already created.
+Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2). Tables and RLS are already created.
 
 **Supabase Auth settings** (dashboard → Authentication):
 - **Emails → Templates:** set the **Magic Link** and **Confirm signup** templates to [`docs/supabase-email/sign-in-code.html`](docs/supabase-email/sign-in-code.html) (subject "Your MotorMetric sign-in code"). It shows the 6-digit `{{ .Token }}` instead of a link.
@@ -92,7 +92,7 @@ Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2).
 - **Sign-in:** passwordless — staff enter their email, `POST /api/auth/send-code` asks Supabase Auth to email a 6-digit code (only for invited emails), and the browser verifies it with `supabase.auth.verifyOtp`. The browser then sends its access token to `/api/*`, which verifies it with Supabase.
 - **Single-dealer mode:** every invited user works on one shared stock book (`SHARED_TENANT_ID`). Codes are only sent to emails in the `app_users` table (Settings → Users), the `ALLOWED_EMAILS`/`ADMIN_EMAILS` backstops, or the hardcoded operator list.
 - **Two web addresses, one deployment:** hosts in `NEXT_PUBLIC_SHOWROOM_HOSTS` only ever see the public showroom at `/`; other hosts get the dealer app with the showroom under `/showroom`.
-- **Files:** uploads go straight from the browser to Supabase Storage via signed URLs; access policy lives in `stored_objects`; served via `/api/storage/objects/uploads/<id>`.
+- **Files:** stored in Cloudflare R2 (bucket `cardealerstocksystem-files`, binding `FILES`). The browser uploads to `/api/storage/uploads/direct/<id>` with a short-lived signed token; access policy lives in `stored_objects`; files are served via `/api/storage/objects/uploads/<id>`.
 - **Scheduled jobs** (Cloudflare cron → `/api/cron/<job>`): showroom removal sweep (15 min), orphaned upload cleanup (30 min), Cazoo import health check (daily 06:00 UTC).
 - Extras invoices and vehicle sales invoices always share the same invoice date (business rule).
 

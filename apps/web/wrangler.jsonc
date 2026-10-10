@@ -14,6 +14,10 @@
   "routes": [
     { "pattern": "cardealerstockbook.racecargraphics.uk", "custom_domain": true }
   ],
+  // Uploaded files (dealer logo, vehicle photos, showroom icons).
+  "r2_buckets": [
+    { "binding": "FILES", "bucket_name": "cardealerstocksystem-files" }
+  ],
   "observability": {
     "enabled": true
   },
@@ -30,7 +34,6 @@
   "vars": {
     "APP_URL": "https://cardealerstockbook.racecargraphics.uk",
     "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
-    "STORAGE_BUCKET": "stock-book",
     // Email goes out via the SendGrid API (secret: SENDGRID_API_KEY). The
     // from-address must be a verified sender / authenticated domain in SendGrid.
     // Testing sender; change to the dealer domain (and authenticate it in SendGrid) for go-live.

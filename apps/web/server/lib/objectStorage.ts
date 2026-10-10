@@ -1,14 +1,12 @@
-// File storage backed by Supabase Storage (replaces Replit's GCS sidecar).
+// File storage backed by Cloudflare R2 (binding `FILES`, see wrangler.jsonc).
 //
 // Objects keep the same logical paths the app has always stored in the
 // database ("/objects/uploads/<uuid>"), so existing vehicle/settings rows keep
-// working once their files are copied across. Bytes live in a private Supabase
+// working once their files are copied across. Bytes live in a private R2
 // bucket; the access policy (public vs private + owner) lives in the
 // `stored_objects` table. Every read goes through /api/storage/objects/...,
 // which checks that policy before streaming the file.
-//
-// Uses the Storage REST API directly via fetch, so it runs on Node and on
-// Cloudflare Workers without extra SDKs.
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, inArray } from "@workspace/db";
 import { db, storedObjectsTable } from "@workspace/db";
 import { ObjectPermission, type ObjectAclPolicy, canAccessPolicy } from "./objectAcl";
@@ -39,24 +37,35 @@ export interface StoredFile {
   objectId: string;
 }
 
-function config() {
-  const url = (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY ?? "";
-  const bucket = process.env.STORAGE_BUCKET ?? "stock-book";
-  if (!url || !key) {
-    throw new Error(
-      "Supabase Storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
-    );
+// Minimal R2 binding types (avoids depending on @cloudflare/workers-types).
+interface R2ObjectLike {
+  key: string;
+  size: number;
+  uploaded: Date;
+  httpMetadata?: { contentType?: string };
+}
+interface R2ObjectBodyLike extends R2ObjectLike {
+  body: ReadableStream;
+}
+interface R2BucketLike {
+  head(key: string): Promise<R2ObjectLike | null>;
+  get(key: string): Promise<R2ObjectBodyLike | null>;
+  put(key: string, value: ArrayBuffer | ReadableStream | Uint8Array, options?: { httpMetadata?: { contentType?: string } }): Promise<R2ObjectLike | null>;
+  delete(keys: string | string[]): Promise<void>;
+  list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{ objects: R2ObjectLike[]; truncated: boolean; cursor?: string }>;
+}
+
+function bucket(): R2BucketLike {
+  let files: R2BucketLike | undefined;
+  try {
+    files = (getCloudflareContext().env as unknown as { FILES?: R2BucketLike }).FILES;
+  } catch {
+    files = undefined;
   }
-  return { url, key, bucket };
-}
-
-function authHeaders(key: string): Record<string, string> {
-  return { apikey: key, Authorization: `Bearer ${key}` };
-}
-
-function encodeKey(key: string): string {
-  return key.split("/").map(encodeURIComponent).join("/");
+  if (!files) {
+    throw new Error("File storage is not configured (missing R2 binding FILES).");
+  }
+  return files;
 }
 
 const UPLOADS_PREFIX = "uploads";
@@ -67,42 +76,7 @@ export class ObjectStorageService {
     return `${UPLOADS_PREFIX}/${objectId}`;
   }
 
-  /**
-   * Returns a short-lived URL the browser can PUT the file body to directly
-   * (Supabase signed upload URL). The bucket's own file-size and MIME limits
-   * are enforced by Supabase; we re-check the stored size on finalise.
-   */
-  async createSignedUploadUrl(objectId: string): Promise<string> {
-    const { url, key, bucket } = config();
-    const resp = await fetch(
-      `${url}/storage/v1/object/upload/sign/${bucket}/${encodeKey(this.keyFor(objectId))}`,
-      { method: "POST", headers: { ...authHeaders(key), "Content-Type": "application/json" }, body: "{}" },
-    );
-    if (!resp.ok) {
-      throw new Error(`Failed to sign upload URL (${resp.status}): ${await resp.text()}`);
-    }
-    const data = (await resp.json()) as { url: string };
-    return `${url}/storage/v1${data.url}`;
-  }
-
-  /** Upload bytes using a Supabase signed-upload token (browser uploads). */
-  async uploadWithSignedToken(
-    objectId: string,
-    token: string,
-    contentType: string,
-    body: ArrayBuffer,
-  ): Promise<void> {
-    const { url, bucket } = config();
-    const resp = await fetch(
-      `${url}/storage/v1/object/upload/sign/${bucket}/${encodeKey(this.keyFor(objectId))}?token=${encodeURIComponent(token)}`,
-      { method: "PUT", headers: { "Content-Type": contentType, "x-upsert": "false" }, body },
-    );
-    if (!resp.ok) {
-      throw new Error(`Signed upload failed (${resp.status}): ${(await resp.text()).slice(0, 300)}`);
-    }
-  }
-
-  /** Upload bytes server-side (used by the Cazoo photo import). */
+  /** Store bytes for an upload id (browser uploads and the Cazoo photo import). */
   async uploadObject(
     objectId: string,
     contentType: string,
@@ -112,72 +86,43 @@ export class ObjectStorageService {
     if (body.byteLength > maxBytes) {
       throw new Error(`Upload too large: received ${body.byteLength} bytes, limit is ${maxBytes} bytes`);
     }
-    const { url, key, bucket } = config();
-    const resp = await fetch(`${url}/storage/v1/object/${bucket}/${encodeKey(this.keyFor(objectId))}`, {
-      method: "POST",
-      headers: { ...authHeaders(key), "Content-Type": contentType, "x-upsert": "true" },
-      body: body as BodyInit,
-    });
-    if (!resp.ok) {
-      throw new Error(`Upload failed (${resp.status}): ${await resp.text()}`);
-    }
+    await bucket().put(this.keyFor(objectId), body, { httpMetadata: { contentType } });
   }
 
   /** Size + content type of a stored object, or null if it doesn't exist. */
   async statObject(objectId: string): Promise<{ size: number; contentType: string | null } | null> {
-    const { url, key, bucket } = config();
-    const resp = await fetch(`${url}/storage/v1/object/list/${bucket}`, {
-      method: "POST",
-      headers: { ...authHeaders(key), "Content-Type": "application/json" },
-      body: JSON.stringify({ prefix: UPLOADS_PREFIX, search: objectId, limit: 10 }),
-    });
-    if (!resp.ok) throw new Error(`Storage list failed (${resp.status})`);
-    const rows = (await resp.json()) as Array<{
-      name: string;
-      metadata?: { size?: number; mimetype?: string } | null;
-    }>;
-    const row = rows.find((r) => r.name === objectId);
-    if (!row) return null;
-    return { size: Number(row.metadata?.size ?? 0), contentType: row.metadata?.mimetype ?? null };
+    const head = await bucket().head(this.keyFor(objectId));
+    if (!head) return null;
+    return { size: head.size, contentType: head.httpMetadata?.contentType ?? null };
   }
 
   async deleteObjects(objectIds: string[]): Promise<void> {
     if (objectIds.length === 0) return;
-    const { url, key, bucket } = config();
-    await fetch(`${url}/storage/v1/object/${bucket}`, {
-      method: "DELETE",
-      headers: { ...authHeaders(key), "Content-Type": "application/json" },
-      body: JSON.stringify({ prefixes: objectIds.map((id) => this.keyFor(id)) }),
-    });
+    await bucket().delete(objectIds.map((id) => this.keyFor(id)));
   }
 
-  /** Resolve "/objects/uploads/<id>" to a stored file, or throw ObjectNotFoundError. */
   async getObjectEntityFile(objectPath: string): Promise<StoredFile> {
     const objectId = parseObjectPath(objectPath);
     if (!objectId) throw new ObjectNotFoundError();
     return { key: this.keyFor(objectId), objectId };
   }
 
-  /** Stream an object as a Web Response (status/headers mirror the original). */
+  /** Stream an object as a Web Response. */
   async downloadObject(file: StoredFile, cacheTtlSec = 3600): Promise<Response> {
-    const { url, key, bucket } = config();
-    const resp = await fetch(`${url}/storage/v1/object/${bucket}/${encodeKey(file.key)}`, {
-      headers: authHeaders(key),
-    });
-    if (resp.status === 400 || resp.status === 404) throw new ObjectNotFoundError();
-    if (!resp.ok) throw new Error(`Storage download failed (${resp.status})`);
+    const obj = await bucket().get(file.key);
+    if (!obj) throw new ObjectNotFoundError();
     const [policy] = await db
       .select({ visibility: storedObjectsTable.visibility })
       .from(storedObjectsTable)
       .where(eq(storedObjectsTable.objectId, file.objectId));
     const isPublic = policy?.visibility === "public";
-    const headers: Record<string, string> = {
-      "Content-Type": resp.headers.get("content-type") || "application/octet-stream",
-      "Cache-Control": `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}`,
-    };
-    const len = resp.headers.get("content-length");
-    if (len) headers["Content-Length"] = len;
-    return new Response(resp.body, { headers });
+    return new Response(obj.body, {
+      headers: {
+        "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
+        "Content-Length": String(obj.size),
+        "Cache-Control": `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}`,
+      },
+    });
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
@@ -260,24 +205,16 @@ export class ObjectStorageService {
    * stored_objects row). Finalised files are never touched.
    */
   async cleanupOrphanedUploads(maxAgeMs: number): Promise<number> {
-    const { url, key, bucket } = config();
     const cutoff = Date.now() - maxAgeMs;
-    let offset = 0;
     const candidates: string[] = [];
-    for (;;) {
-      const resp = await fetch(`${url}/storage/v1/object/list/${bucket}`, {
-        method: "POST",
-        headers: { ...authHeaders(key), "Content-Type": "application/json" },
-        body: JSON.stringify({ prefix: UPLOADS_PREFIX, limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } }),
-      });
-      if (!resp.ok) throw new Error(`Storage list failed (${resp.status})`);
-      const rows = (await resp.json()) as Array<{ name: string; created_at?: string | null }>;
-      for (const r of rows) {
-        if (r.created_at && new Date(r.created_at).getTime() < cutoff) candidates.push(r.name);
+    let cursor: string | undefined;
+    do {
+      const page = await bucket().list({ prefix: `${UPLOADS_PREFIX}/`, cursor, limit: 1000 });
+      for (const o of page.objects) {
+        if (new Date(o.uploaded).getTime() < cutoff) candidates.push(o.key.slice(UPLOADS_PREFIX.length + 1));
       }
-      if (rows.length < 1000) break;
-      offset += rows.length;
-    }
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
     if (candidates.length === 0) return 0;
     const orphans: string[] = [];
     for (let i = 0; i < candidates.length; i += 500) {

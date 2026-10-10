@@ -27,7 +27,7 @@ Data is scoped by `SHARED_TENANT_ID` (a fixed string, not a live user id), so it
 ## 2. Files (logo, vehicle photos, feature icons)
 
 1. In Replit's **Object Storage** pane, download everything under `.private/uploads/` (the `PRIVATE_OBJECT_DIR`).
-2. Upload them to Supabase → Storage → bucket **stock-book**, folder **uploads/**, keeping each file name (a UUID) unchanged.
+2. Upload them to Cloudflare → R2 → bucket **cardealerstocksystem-files**, folder **uploads/**, keeping each file name (a UUID) unchanged.
 3. Run `lib/db/sql/backfill-stored-objects.sql` in the Supabase SQL editor to mark the referenced files as public, as they were on Replit.
 
 ## 3. Sign-in (now Supabase Auth)

@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "../http";
 import {
   RequestUploadUrlBody,
@@ -22,6 +23,45 @@ const SAFE_SERVE_CONTENT_TYPES = new Set([
   "image/gif",
   "image/webp",
 ]);
+
+// ---------------------------------------------------------------------------
+// Upload tokens
+// ---------------------------------------------------------------------------
+// Short-lived (15 min) HMAC-signed tokens encode the exact object id, size
+// limit and content type, so the upload route can enforce them without any
+// stored state. The secret must be the same on every Worker instance, so it
+// comes from configuration (UPLOAD_TOKEN_SECRET, falling back to CRON_SECRET).
+
+interface UploadTokenPayload {
+  objectId: string;
+  maxSize: number;
+  contentType: string;
+  exp: number;
+}
+
+function tokenSecret(): string {
+  const secret = process.env.UPLOAD_TOKEN_SECRET || process.env.CRON_SECRET;
+  if (!secret) throw new Error("UPLOAD_TOKEN_SECRET (or CRON_SECRET) is not set");
+  return secret;
+}
+
+function createUploadToken(payload: UploadTokenPayload): string {
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = createHmac("sha256", tokenSecret()).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+function verifyUploadToken(token: string): UploadTokenPayload {
+  const dot = token.lastIndexOf(".");
+  if (dot < 0) throw new Error("Malformed token");
+  const data = token.slice(0, dot);
+  const sig = Buffer.from(token.slice(dot + 1));
+  const expected = Buffer.from(createHmac("sha256", tokenSecret()).update(data).digest("base64url"));
+  if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) throw new Error("Invalid token");
+  const payload = JSON.parse(Buffer.from(data, "base64url").toString()) as UploadTokenPayload;
+  if (Date.now() > payload.exp) throw new Error("Token expired");
+  return payload;
+}
 
 // ---------------------------------------------------------------------------
 // Per-user rate limit on upload URL issuance
@@ -56,10 +96,9 @@ function checkUploadUrlRateLimit(userId: string): boolean {
 /**
  * POST /storage/uploads/request-url
  *
- * Issues a short-lived, HMAC-signed upload token and returns a server-side
- * upload URL (PUT /storage/uploads/direct/:token). The client then PUTs the
- * file body directly to that URL — uploads never go to GCS presigned URLs,
- * so the server can enforce the byte limit on the incoming stream.
+ * Issues a short-lived, HMAC-signed upload token and returns a same-origin
+ * upload URL (PUT /storage/uploads/direct/:objectId?token=…). The client PUTs
+ * the file body there and the server enforces the limits before storing it.
  */
 router.post(
   "/storage/uploads/request-url",
@@ -100,17 +139,19 @@ router.post(
     const objectPath = `/objects/uploads/${objectId}`;
     let uploadURL: string;
     try {
-      // Supabase issues a signed, single-use upload token for this object. The
-      // browser PUTs to our own same-origin route below, which forwards the
-      // bytes to Supabase. (Uploading cross-origin straight to Supabase works,
-      // but the browser hides the ETag header the upload widget waits for.)
-      const signed = new URL(await objectStorageService.createSignedUploadUrl(objectId));
-      const token = signed.searchParams.get("token") ?? "";
+      const token = createUploadToken({
+        objectId,
+        maxSize: size,
+        contentType,
+        exp: Date.now() + 15 * 60 * 1000,
+      });
+      // Same-origin upload route (below) — the browser PUTs the file there and
+      // the Worker writes it to R2.
       const protocol = req.get("x-forwarded-proto") ?? req.protocol;
       const host = req.get("x-forwarded-host") ?? req.get("host") ?? "";
       uploadURL = `${protocol}://${host}/api/storage/uploads/direct/${objectId}?token=${encodeURIComponent(token)}`;
     } catch (err) {
-      req.log.error({ err }, "Failed to create signed upload URL");
+      req.log.error({ err }, "Failed to create upload token");
       res.status(500).json({ error: "Uploads are not available right now." });
       return;
     }
@@ -122,40 +163,47 @@ router.post(
 /**
  * PUT /storage/uploads/direct/:objectId?token=…
  *
- * Same-origin upload endpoint. The Supabase-signed token (from request-url) is
- * the credential — it only allows writing this one object, once, for a short
- * time. Enforces the size/type limits, forwards the bytes to Supabase Storage
- * and replies with an ETag so the upload widget registers success.
+ * Same-origin upload endpoint. The signed token from request-url is the
+ * credential: it allows writing this one object, with this content type and
+ * size, for 15 minutes. Writes the bytes to R2 and replies with an ETag so the
+ * upload widget registers success.
  */
 router.put("/storage/uploads/direct/:objectId", async (req: Request, res: Response) => {
   const objectId = req.params.objectId ?? "";
-  const token = req.query.token ?? "";
-  if (!/^[0-9a-f-]{36}$/i.test(objectId) || !token) {
-    res.status(400).json({ error: "Invalid upload link" });
+  let payload: UploadTokenPayload;
+  try {
+    payload = verifyUploadToken(req.query.token ?? "");
+  } catch {
+    res.status(401).json({ error: "Invalid or expired upload link" });
+    return;
+  }
+  if (payload.objectId !== objectId) {
+    res.status(401).json({ error: "Invalid upload link" });
     return;
   }
   const contentType = (req.get("content-type") ?? "").split(";")[0]!.trim();
-  if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(contentType)) {
-    res.status(400).json({ error: "Unsupported file type." });
+  if (contentType !== payload.contentType || !ALLOWED_UPLOAD_CONTENT_TYPES.has(contentType)) {
+    res.status(400).json({ error: "Content-Type does not match upload token" });
     return;
   }
-  const declared = Number(req.get("content-length") ?? "0");
-  if (declared > MAX_UPLOAD_BYTES) {
+  const limit = Math.min(payload.maxSize, MAX_UPLOAD_BYTES);
+  if (Number(req.get("content-length") ?? "0") > limit) {
     res.status(413).json({ error: "File too large" });
     return;
   }
   const body = await req.raw.arrayBuffer();
-  if (body.byteLength > MAX_UPLOAD_BYTES) {
+  if (body.byteLength > limit) {
     res.status(413).json({ error: "File too large" });
     return;
   }
   try {
-    await objectStorageService.uploadWithSignedToken(objectId, token, contentType, body);
+    await objectStorageService.uploadObject(objectId, contentType, body, limit);
   } catch (err) {
-    req.log.error({ err }, "Error forwarding upload to storage");
-    res.status(502).json({ error: "Upload failed" });
+    req.log.error({ err }, "Error storing upload");
+    res.status(500).json({ error: "Upload failed" });
     return;
   }
+  // The upload widget treats a response with an ETag as success.
   res.setHeader("ETag", `"${objectId}"`);
   res.status(200).json({ ok: true, objectPath: `/objects/uploads/${objectId}` });
 });
@@ -164,7 +212,7 @@ router.put("/storage/uploads/direct/:objectId", async (req: Request, res: Respon
  * GET /storage/public-objects/*
  *
  * Kept for API compatibility; the app stores no "public search path" assets in
- * Supabase, so this always 404s.
+ * storage, so this always 404s.
  */
 router.get("/storage/public-objects/*filePath", async (_req: Request, res: Response) => {
   res.status(404).json({ error: "File not found" });
