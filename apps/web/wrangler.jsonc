@@ -9,6 +9,11 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Custom domain (the racecargraphics.uk zone must be in this Cloudflare
+  // account; deploy creates the DNS record and certificate automatically).
+  "routes": [
+    { "pattern": "cardealerstockbook.racecargraphics.uk", "custom_domain": true }
+  ],
   "observability": {
     "enabled": true
   },
@@ -24,6 +29,7 @@
   // with `wrangler secret put` or in the Cloudflare dashboard.
   "vars": {
     "DB_SCOPE": "request",
+    "APP_URL": "https://cardealerstockbook.racecargraphics.uk",
     "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
     "STORAGE_BUCKET": "stock-book",
     // Email goes out via the SendGrid API (secret: SENDGRID_API_KEY). The
