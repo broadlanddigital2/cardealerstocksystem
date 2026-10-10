@@ -1,0 +1,9 @@
+<!-- Paste into Supabase → Authentication → Emails → Templates for BOTH
+     "Magic Link" and "Confirm signup". Subject: Your MotorMetric sign-in code -->
+<div style="font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; line-height: 1.5; max-width: 480px;">
+  <h2 style="margin: 0 0 12px;">Your sign-in code</h2>
+  <p style="margin: 0 0 16px;">Enter this code on the MotorMetric stock book sign-in page:</p>
+  <p style="margin: 0 0 16px; font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: 'Courier New', monospace;">{{ .Token }}</p>
+  <p style="margin: 0 0 16px; color: #666; font-size: 13px;">The code expires in 1 hour and can only be used once. If you didn't ask to sign in, you can ignore this email.</p>
+  <p style="margin: 0; color: #666; font-size: 13px;">— MotorMetric Stock Book</p>
+</div>

@@ -32,7 +32,7 @@ Data is scoped by `SHARED_TENANT_ID` (a fixed string, not a live user id), so it
 
 ## 3. Sign-in (now Supabase Auth)
 
-The Replit app used a Clerk login run by Replit; the new app uses Supabase Auth in the same Supabase project. Logins don't carry over: staff create a new account at `/sign-up` with the **same email address**. Their access and admin rights come from the `app_users` table, so they carry over automatically. Before telling staff, finish the Supabase Auth settings in the README (redirect URLs and custom SMTP).
+The Replit app used a Clerk login run by Replit; the new app uses Supabase Auth in the same Supabase project. There are no passwords any more: staff go to `/sign-in`, enter the **same email address** as before, and type in the 6-digit code they're emailed. Their access and admin rights come from the `app_users` table, so they carry over automatically. Before telling staff, finish the Supabase Auth settings in the README (email templates, custom SMTP, URL configuration).
 
 ## 4. Domains
 

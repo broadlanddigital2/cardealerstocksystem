@@ -1,7 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { ForgotPasswordForm } from "@/components/auth/AuthForms";
-
+// Sign-in is by emailed 6-digit code; old password links land on sign-in.
 export default function Page() {
-  return <ForgotPasswordForm />;
+  redirect("/sign-in");
 }
