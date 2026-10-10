@@ -1,4 +1,3 @@
-import { clerkClient } from "@clerk/nextjs/server";
 import type { Request, Response, NextFunction } from "../http";
 import { db, appUsersTable } from "@workspace/db";
 
@@ -6,9 +5,9 @@ import { db, appUsersTable } from "@workspace/db";
 //
 // This deployment serves ONE dealer. Every signed-in user works on the same
 // shared stock book rather than a private per-user one. We still require a valid
-// Clerk session (so the data is not world-readable/writable), but once a request
+// Supabase Auth session (so the data is not world-readable/writable), but once a request
 // is authenticated we scope all data access to a single shared tenant id instead
-// of the individual Clerk user id.
+// of the individual Supabase user id.
 //
 // The shared tenant id defaults to the dealer whose data this app was set up
 // with ("Manor Garage Car Sales Ltd"). It can be overridden per deployment via
@@ -19,7 +18,7 @@ export const SHARED_TENANT_ID =
 
 // Invite-only access control.
 //
-// Clerk allows anyone to create an account, so authentication alone does not
+// Anyone can create an account, so authentication alone does not
 // restrict who can reach the shared stock book. We additionally gate access on
 // an allowlist of email addresses supplied via the ALLOWED_EMAILS env var
 // (comma-separated). Only signed-in users whose primary email is on the list
@@ -121,38 +120,24 @@ export async function isEmailAllowed(
   return users.has(normalized);
 }
 
-// Resolve the standard Clerk user id (`user_...`) for the current request, used
-// to look the user's email up via the Clerk API. This is the REAL signed-in
-// user, distinct from SHARED_TENANT_ID which is only the data scope.
-// The API entry point (app/api/[[...path]]/route.ts) resolves the Clerk session
-// once per request via `auth()` and stores it on req.sessionUserId.
+// The real signed-in Supabase Auth user, resolved once per request by the API
+// entry point (server/index.ts) and stored on the request. This is distinct
+// from SHARED_TENANT_ID, which is only the data scope.
 export function getSessionUserId(req: Request): string | null {
   return req.sessionUserId ? String(req.sessionUserId) : null;
 }
 
-// Small in-memory cache so we don't call the Clerk API on every request.
-const EMAIL_TTL_MS = 5 * 60 * 1000;
-const emailCache = new Map<string, { email: string | null; ts: number }>();
+// Emails of users verified during this isolate's recent requests, keyed by
+// Supabase user id (filled by server/index.ts from the verified session).
+const sessionEmails = new Map<string, string | null>();
+
+export function rememberSessionEmail(userId: string, email: string | null): void {
+  if (sessionEmails.size > 1000) sessionEmails.clear();
+  sessionEmails.set(userId, email);
+}
 
 export async function getUserEmail(userId: string): Promise<string | null> {
-  const now = Date.now();
-  const cached = emailCache.get(userId);
-  if (cached && now - cached.ts < EMAIL_TTL_MS) return cached.email;
-
-  let email: string | null = null;
-  try {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    const primary =
-      user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId) ??
-      user.emailAddresses[0];
-    email = primary?.emailAddress?.toLowerCase() ?? null;
-  } catch {
-    email = null;
-  }
-
-  emailCache.set(userId, { email, ts: now });
-  return email;
+  return sessionEmails.get(userId) ?? null;
 }
 
 export async function requireAuth(
@@ -174,7 +159,7 @@ export async function requireAuth(
   }
 
   // Authenticated and invited — scope data to the single shared dealer, not this
-  // individual Clerk user. See SHARED_TENANT_ID above.
+  // individual signed-in user. See SHARED_TENANT_ID above.
   req.userId = SHARED_TENANT_ID;
   next();
 }

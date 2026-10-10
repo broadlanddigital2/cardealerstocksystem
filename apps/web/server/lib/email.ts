@@ -242,7 +242,8 @@ export async function sendInviteEmail(
   }
 
   const business = details.businessName?.trim() || "Stock Book";
-  const signInUrl = getAppBaseUrl();
+  const base = getAppBaseUrl();
+  const signInUrl = base ? `${base}/sign-up` : "";
   const accessNote =
     details.role === "admin"
       ? "You'll have full admin access, including reports and settings."
@@ -256,8 +257,8 @@ export async function sendInviteEmail(
     accessNote,
     ``,
     signInUrl
-      ? `Sign in here using this email address (${details.to}):`
-      : `Sign in using this email address: ${details.to}`,
+      ? `Create your account here using this email address (${details.to}) — if you already have one, just sign in:`
+      : `Create your account (or sign in) using this email address: ${details.to}`,
     ...(signInUrl ? [signInUrl] : []),
     ``,
     `If you weren't expecting this, you can safely ignore this email.`,
@@ -270,10 +271,10 @@ export async function sendInviteEmail(
       <h2 style="margin: 0 0 12px;">You've been invited</h2>
       <p style="margin: 0 0 12px;">You've been given access to the <strong>${escapeHtml(business)}</strong> Stock Book.</p>
       <p style="margin: 0 0 16px;">${escapeHtml(accessNote)}</p>
-      <p style="margin: 0 0 8px;">Sign in using this email address: <strong>${escapeHtml(details.to)}</strong></p>
+      <p style="margin: 0 0 8px;">Create your account (or sign in, if you already have one) using this email address: <strong>${escapeHtml(details.to)}</strong></p>
       ${
         signInUrl
-          ? `<p style="margin: 0 0 20px;"><a href="${escapeHtml(signInUrl)}" style="display: inline-block; background: #157ABE; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">Sign in</a></p>`
+          ? `<p style="margin: 0 0 20px;"><a href="${escapeHtml(signInUrl)}" style="display: inline-block; background: #157ABE; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">Get started</a></p>`
           : ""
       }
       <p style="margin: 0 0 16px; color: #666; font-size: 13px;">If you weren't expecting this, you can safely ignore this email.</p>

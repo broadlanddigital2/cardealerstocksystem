@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth";
 import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey, type DealerSettingsInputVatQuarter } from "@workspace/api-client-react";
 import { ObjectUploader } from "@workspace/object-storage-web";
 import { useQueryClient } from "@tanstack/react-query";

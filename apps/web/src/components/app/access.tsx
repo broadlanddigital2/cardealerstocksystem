@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { SignOutButton, useAuth } from "@clerk/nextjs";
+import { useAuth, useSignOut } from "@/lib/auth";
 import { useLocation } from "@/lib/router";
 
 // Verifies the signed-in user is on the dealer's invite list before rendering
@@ -16,6 +16,7 @@ export function useAccess() {
 
 export function AccessGate({ children }: { children: ReactNode }) {
   const { getToken } = useAuth();
+  const signOut = useSignOut();
   const [status, setStatus] = useState<"checking" | "allowed" | "denied">("checking");
   const [email, setEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -57,11 +58,12 @@ export function AccessGate({ children }: { children: ReactNode }) {
             Ask the dealer to add your email address, then sign in again.
           </p>
           <div className="mt-6">
-            <SignOutButton>
-              <button className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-                Sign out
-              </button>
-            </SignOutButton>
+            <button
+              onClick={() => signOut("/")}
+              className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </div>

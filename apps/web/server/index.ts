@@ -1,24 +1,22 @@
-import { auth } from "@clerk/nextjs/server";
 import { withRequestDb } from "@workspace/db";
 import { createRequest, createResponse } from "./http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { getSessionUser } from "./lib/supabaseAuth";
+import { rememberSessionEmail } from "./middlewares/requireAuth";
 
 /**
  * Entry point for every /api/* request (wired up in app/api/[[...path]]/route.ts).
- * Resolves the Clerk session, then runs the Express-style route modules.
+ * Resolves the Supabase Auth session, then runs the Express-style route modules.
  */
 export async function handleApiRequest(raw: Request): Promise<Response> {
   return withRequestDb(async () => {
     const req = await createRequest(raw, "/api");
     const res = createResponse();
     try {
-      try {
-        const session = await auth();
-        req.sessionUserId = session.userId ?? null;
-      } catch {
-        req.sessionUserId = null;
-      }
+      const user = await getSessionUser(req.headers);
+      req.sessionUserId = user?.id ?? null;
+      if (user) rememberSessionEmail(user.id, user.email);
 
       if (req.headers["x-body-parse-error"]) {
         res.status(400).json({ error: "Invalid JSON body" });

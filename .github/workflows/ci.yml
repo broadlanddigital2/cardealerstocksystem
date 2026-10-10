@@ -16,10 +16,10 @@ permissions:
   contents: write
 
 env:
-  # Public, build-time values. Set them under Settings -> Secrets and variables
-  # -> Actions -> Variables. A syntactically valid placeholder Clerk key lets
-  # CI build before the real one is configured.
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk' }}
+  # Public, build-time values (Settings -> Secrets and variables -> Actions ->
+  # Variables). Supabase URL/publishable key default to the production project.
+  NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
   NEXT_PUBLIC_SHOWROOM_HOSTS: ${{ vars.NEXT_PUBLIC_SHOWROOM_HOSTS }}
   NEXT_TELEMETRY_DISABLED: 1
 
@@ -38,11 +38,12 @@ jobs:
           cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || '' }}
 
       - name: Install dependencies
+        # main must install exactly what's locked; feature branches may update
+        # the lockfile (the change is committed back below).
         run: |
-          if [ -f pnpm-lock.yaml ]; then
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             pnpm install --frozen-lockfile
           else
-            echo "::warning::No pnpm-lock.yaml committed yet — resolving a fresh one."
             pnpm install --no-frozen-lockfile
           fi
 

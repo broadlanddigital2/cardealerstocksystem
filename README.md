@@ -2,7 +2,7 @@
 
 UK second-hand motor dealer stock book for accountants' motor-trade clients. Tracks vehicles from purchase to sale, applies the VAT Margin Scheme (Second-hand Goods) automatically, and produces branded margin-scheme invoices, reports and exports. Includes a public showroom website for the dealer.
 
-**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** Postgres + Storage · Clerk auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
+**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** Postgres + Storage · Supabase Auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
 
 ## Layout
 
@@ -12,7 +12,8 @@ UK second-hand motor dealer stock book for accountants' motor-trade clients. Tra
 | `apps/web/src/views/` | Page components (Stock, VehicleDetail, Reports, Settings, Showroom, …) |
 | `apps/web/server/` | API: route modules (`routes/`), business logic (`lib/`), auth (`middlewares/`), tests (`test/`) |
 | `apps/web/server/http.ts` | Small Express-style router running on Web `Request`/`Response` |
-| `apps/web/middleware.ts` | Clerk + customer-domain → showroom rewrite |
+| `apps/web/middleware.ts` | Customer-domain → showroom rewrite |
+| `apps/web/src/lib/auth.tsx` | Supabase Auth client + hooks; sign-in/up/reset pages in `src/components/auth` |
 | `apps/web/worker.ts` | Cloudflare entry: OpenNext worker + cron (`scheduled`) handler |
 | `lib/db/` | Drizzle schema (source of truth) and generated SQL `migrations/` |
 | `lib/api-spec/` | OpenAPI spec → generated `lib/api-zod` + `lib/api-client-react` (Orval) |
@@ -51,7 +52,6 @@ Deploy jobs skip themselves (with a notice) until their secrets exist.
 | Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare token with *Edit Cloudflare Workers* |
 | Secret | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
 | Secret | `DATABASE_URL` | Supabase **session pooler** URI (port 5432) |
-| Variable | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (`pk_live_…`) |
 | Variable | `NEXT_PUBLIC_SHOWROOM_HOSTS` | e.g. `manorgcs.co.uk,www.manorgcs.co.uk` (optional) |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
@@ -59,8 +59,6 @@ Deploy jobs skip themselves (with a notice) until their secrets exist.
 | Secret | Value |
 |---|---|
 | `DATABASE_URL` | Supabase **transaction pooler** URI (port 6543) |
-| `CLERK_SECRET_KEY` | Clerk secret key |
-| `CLERK_PUBLISHABLE_KEY` | same as the public one |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API keys → `service_role` / secret key |
 | `CRON_SECRET` | any long random string |
 | `SMTP_PASS` | dealer mailbox password |
@@ -70,10 +68,15 @@ Deploy jobs skip themselves (with a notice) until their secrets exist.
 
 Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2). Tables, RLS and the private `stock-book` storage bucket (10 MB, images only) are already created.
 
+**Supabase Auth settings** (dashboard → Authentication):
+- **URL Configuration:** Site URL = the live staff URL; add `https://<your-worker>.workers.dev/**`, the custom domain `/**` and `http://localhost:3000/**` to Redirect URLs.
+- **Emails → SMTP Settings:** turn on custom SMTP with the dealer mailbox (`smtp.livemail.co.uk`, port 465, `noreply@motormetric-mg.co.uk`). Supabase's built-in sender only delivers to your own team and is heavily rate-limited, so sign-up confirmations and password resets need this.
+
 ## Notes
 
 - **VAT Margin Scheme:** margin = sale − purchase; VAT due = ⅙ of margin when margin > 0, else £0.
-- **Single-dealer mode:** every invited user works on one shared stock book (`SHARED_TENANT_ID`). Access is invite-only via the `app_users` table (Settings → Users) plus hardcoded operator emails.
+- **Sign-in:** Supabase Auth (email + password, email confirmation, password reset). The browser sends its access token to `/api/*`, which verifies it with Supabase.
+- **Single-dealer mode:** every invited user works on one shared stock book (`SHARED_TENANT_ID`). Anyone can create a login, but only emails in the `app_users` table (Settings → Users) or the hardcoded operator list get in.
 - **Two web addresses, one deployment:** hosts in `NEXT_PUBLIC_SHOWROOM_HOSTS` only ever see the public showroom at `/`; other hosts get the dealer app with the showroom under `/showroom`.
 - **Files:** uploads go straight from the browser to Supabase Storage via signed URLs; access policy lives in `stored_objects`; served via `/api/storage/objects/uploads/<id>`.
 - **Scheduled jobs** (Cloudflare cron → `/api/cron/<job>`): showroom removal sweep (15 min), orphaned upload cleanup (30 min), Cazoo import health check (daily 06:00 UTC).

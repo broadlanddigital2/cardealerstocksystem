@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "@/lib/router";
-import { useClerk, useUser, useAuth } from "@clerk/nextjs";
+import { useUser, useAuth, useSignOut } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import {
   Car,
@@ -35,7 +35,7 @@ interface NavItem {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
-  const { signOut } = useClerk();
+  const signOut = useSignOut();
   const { user } = useUser();
   const { getToken } = useAuth();
   const { isAdmin } = useAccess();
@@ -143,21 +143,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="p-4">
           <div className="flex items-center gap-3 mb-4 px-2">
             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-medium">
-              {user?.firstName?.charAt(0) || "U"}
+              {(user?.firstName || user?.email || "U").charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">
-                {user?.fullName || "User"}
+                {user?.fullName || user?.email || "User"}
               </p>
               <p className="text-xs text-slate-500 truncate">
-                {user?.primaryEmailAddress?.emailAddress}
+                {user?.fullName ? user?.email : null}
               </p>
             </div>
           </div>
           <Button
             variant="ghost"
             className="w-full justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            onClick={() => signOut({ redirectUrl: basePath || "/" })}
+            onClick={() => signOut(basePath || "/")}
           >
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out

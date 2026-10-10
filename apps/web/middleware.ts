@@ -1,4 +1,3 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { isShowroomHostname } from "@/lib/showroomHost";
 
@@ -25,7 +24,7 @@ function hostOf(req: NextRequest): string {
   return forwarded || req.headers.get("host") || req.nextUrl.hostname;
 }
 
-export default clerkMiddleware((_auth, req) => {
+export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (!pathname.startsWith("/api") && isShowroomHostname(hostOf(req))) {
     const url = req.nextUrl.clone();
@@ -33,12 +32,11 @@ export default clerkMiddleware((_auth, req) => {
     return NextResponse.rewrite(url);
   }
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
     // Skip Next.js internals and static files, unless found in search params.
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt)).*)",
-    "/(api|trpc)(.*)",
   ],
 };

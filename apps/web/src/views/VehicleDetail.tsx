@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "@/lib/router";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth";
 import { 
   useGetVehicle, 
   getGetVehicleQueryKey,

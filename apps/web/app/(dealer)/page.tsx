@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth";
 import { useLocation } from "@/lib/router";
 
 const Landing = dynamic(() => import("@/views/Landing"), { ssr: false });

@@ -22,7 +22,7 @@ The new Supabase database starts empty. To carry the dealer's existing data acro
    end $$;
    ```
 
-Data is scoped by `SHARED_TENANT_ID` (a fixed string, not a live Clerk user), so it stays visible after switching to a new Clerk instance. Leave `SHARED_TENANT_ID` unset to keep the original value.
+Data is scoped by `SHARED_TENANT_ID` (a fixed string, not a live user id), so it stays visible after switching sign-in providers. Leave `SHARED_TENANT_ID` unset to keep the original value.
 
 ## 2. Files (logo, vehicle photos, feature icons)
 
@@ -30,11 +30,9 @@ Data is scoped by `SHARED_TENANT_ID` (a fixed string, not a live Clerk user), so
 2. Upload them to Supabase → Storage → bucket **stock-book**, folder **uploads/**, keeping each file name (a UUID) unchanged.
 3. Run `lib/db/sql/backfill-stored-objects.sql` in the Supabase SQL editor to mark the referenced files as public, as they were on Replit.
 
-## 3. Sign-in (Clerk)
+## 3. Sign-in (now Supabase Auth)
 
-The Replit app used a Clerk instance managed by Replit. Create your own application at https://dashboard.clerk.com (enable Email + Google as before), and put its keys into GitHub/Cloudflare (see README). Staff sign up again with the **same email addresses**; access comes from the `app_users` table, so their permissions carry over automatically.
-
-For production, add the custom domain in Clerk → Domains and create the DNS records it lists in Cloudflare.
+The Replit app used a Clerk login run by Replit; the new app uses Supabase Auth in the same Supabase project. Logins don't carry over: staff create a new account at `/sign-up` with the **same email address**. Their access and admin rights come from the `app_users` table, so they carry over automatically. Before telling staff, finish the Supabase Auth settings in the README (redirect URLs and custom SMTP).
 
 ## 4. Domains
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth";
 import AppLayout from "@/components/layout/AppLayout";
 import { useLocation } from "@/lib/router";
 import { AccessGate, AdminOnly } from "./access";
@@ -12,7 +12,7 @@ export function Protected({ children, adminOnly }: { children: ReactNode; adminO
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isLoaded && !isSignedIn) setLocation("/");
+    if (isLoaded && !isSignedIn) setLocation("/sign-in");
   }, [isLoaded, isSignedIn, setLocation]);
 
   if (!isLoaded || !isSignedIn) return null;

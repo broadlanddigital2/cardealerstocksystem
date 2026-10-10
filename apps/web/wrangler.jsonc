@@ -19,9 +19,9 @@
   "triggers": {
     "crons": ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"]
   },
-  // Non-secret configuration. Secrets (DATABASE_URL, CLERK_SECRET_KEY,
-  // SUPABASE_SERVICE_ROLE_KEY, SMTP_PASS, CRON_SECRET, RAPID_CAR_CHECK_API_KEY,
-  // FIRECRAWL_API_KEY) are set with `wrangler secret put` or in the dashboard.
+  // Non-secret configuration. Secrets (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+  // SMTP_PASS, CRON_SECRET, RAPID_CAR_CHECK_API_KEY, FIRECRAWL_API_KEY) are set
+  // with `wrangler secret put` or in the Cloudflare dashboard.
   "vars": {
     "DB_SCOPE": "request",
     "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",

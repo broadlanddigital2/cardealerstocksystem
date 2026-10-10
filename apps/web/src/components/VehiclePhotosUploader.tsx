@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth";
 import { ObjectUploader } from "@workspace/object-storage-web";
 import { Star, Upload, X } from "lucide-react";
 

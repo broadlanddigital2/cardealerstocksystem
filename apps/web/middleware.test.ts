@@ -1,6 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-
-vi.mock("@clerk/nextjs/server", () => ({ clerkMiddleware: (fn: unknown) => fn }));
+import { describe, it, expect } from "vitest";
 
 import { showroomRewritePath } from "./middleware";
 import { isShowroomHostname } from "@/lib/showroomHost";
