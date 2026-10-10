@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
+import { CloudflareSocket, isCloudflareWorkers } from "./cloudflareSocket";
 
 const { Pool } = pg;
 
@@ -20,12 +21,17 @@ function connectionString(): string {
 function makePool(max: number): pg.Pool {
   const url = connectionString();
   const needsSsl = !/localhost|127\.0\.0\.1/.test(url) && !/sslmode=disable/.test(url);
+  const ssl = needsSsl ? { rejectUnauthorized: false } : undefined;
   return new Pool({
     connectionString: url,
+    // On Workers, hand pg a socket built on cloudflare:sockets (see cloudflareSocket.ts).
+    ...(isCloudflareWorkers()
+      ? { stream: () => new CloudflareSocket(ssl) as unknown as import("node:stream").Duplex }
+      : {}),
     max,
     // Supabase requires TLS; its pooler certificate chain is not in the
     // Workers/Node default store, so verify-full is not attempted here.
-    ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+    ssl,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 15_000,
   });
