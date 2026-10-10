@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cardealerstocksystem",
+  // worker.ts wraps the OpenNext worker to add the cron (scheduled) handler.
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // Jobs that ran on timers inside the old always-on Express server.
+  //   */15 * * * *  -> showroom-sweep (remove sold cars from the website on schedule)
+  //   */30 * * * *  -> orphan-uploads (delete uploads never attached to a record)
+  //   0 6 * * *     -> cazoo-health   (daily Cazoo import canary)
+  "triggers": {
+    "crons": ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"]
+  },
+  // Non-secret configuration. Secrets (DATABASE_URL, CLERK_SECRET_KEY,
+  // SUPABASE_SERVICE_ROLE_KEY, SMTP_PASS, CRON_SECRET, RAPID_CAR_CHECK_API_KEY,
+  // FIRECRAWL_API_KEY) are set with `wrangler secret put` or in the dashboard.
+  "vars": {
+    "DB_SCOPE": "request",
+    "STORAGE_BUCKET": "stock-book",
+    "SMTP_HOST": "smtp.livemail.co.uk",
+    "SMTP_PORT": "465",
+    "SMTP_SECURE": "true",
+    "SMTP_USER": "noreply@motormetric-mg.co.uk",
+    "ENQUIRY_EMAIL_FROM": "noreply@motormetric-mg.co.uk",
+    "RAPID_CAR_CHECK_DOMAIN": "motormetric-mg.co.uk"
+  }
+}

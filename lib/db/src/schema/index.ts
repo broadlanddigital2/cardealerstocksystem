@@ -25,4 +25,4 @@ export * from "./depositRefunds";
 export * from "./cashExpenses";
 export * from "./financeCompanies";
 export * from "./enquiries";
-export * from "./appUsers";
+export * from "./appUsers";export * from "./storedObjects";

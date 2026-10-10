@@ -1,0 +1,110 @@
+name: Deploy
+
+# Runs after CI passes on main:
+#   1. db       -> applies the Drizzle schema to the Supabase Postgres database
+#   2. deploy   -> builds with OpenNext and deploys the Cloudflare Worker
+#
+# Each job switches itself off (with a notice) until its secrets exist, so the
+# pipeline is safe to merge before the infrastructure is ready.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL           Supabase connection string (session pooler, port 5432)
+#   CLOUDFLARE_API_TOKEN   token with "Edit Cloudflare Workers" permission
+#   CLOUDFLARE_ACCOUNT_ID  your Cloudflare account id
+# Repository variables:
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, NEXT_PUBLIC_SHOWROOM_HOSTS
+#
+# Runtime secrets for the Worker itself (CLERK_SECRET_KEY, DATABASE_URL,
+# SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, SMTP_PASS, CRON_SECRET, ...) live in
+# Cloudflare: Workers & Pages -> cardealerstocksystem -> Settings -> Variables.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+  NEXT_PUBLIC_SHOWROOM_HOSTS: ${{ vars.NEXT_PUBLIC_SHOWROOM_HOSTS }}
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  db:
+    name: Sync database schema
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check secret
+        id: ready
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL secret not set — skipping schema sync."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+        if: steps.ready.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - if: steps.ready.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      # drizzle-kit push is additive here; it fails rather than silently
+      # dropping data if a change would be destructive.
+      - name: drizzle-kit push
+        if: steps.ready.outputs.ok == 'true'
+        run: pnpm --filter @workspace/db run push
+
+  deploy:
+    name: Deploy to Cloudflare Workers
+    needs: db
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check secrets
+        id: ready
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY not set — skipping deploy."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+        if: steps.ready.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - if: steps.ready.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Build and deploy
+        if: steps.ready.outputs.ok == 'true'
+        run: pnpm --filter @workspace/web run deploy
