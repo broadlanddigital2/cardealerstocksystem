@@ -34,12 +34,20 @@ After changing `lib/db/src/schema`, run `pnpm --filter @workspace/db run generat
 
 ## Pipeline
 
+Two long-lived branches, each with its own site, database and file bucket:
+
+| Branch | Site | Worker | Database | Files |
+|---|---|---|---|---|
+| `develop` | https://dev-cardealerstockbook.racecargraphics.uk | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
+| `main` (live) | https://cardealerstockbook.racecargraphics.uk | `cardealerstocksystem` | Neon branch `main` | R2 `cardealerstocksystem-files` |
+
 ```
-feature branch ──push──▶ GitHub Actions CI: install → generate SQL migrations → typecheck → tests → next build → OpenNext build
-                         (auto-commits lockfile / new migrations back to the branch)
-pull request ───────────▶ CI must pass
-merge to main ──────────▶ Cloudflare Workers Builds: build + deploy the Worker (same as our other sites)
-                └───────▶ GitHub Actions: CI ──▶ "Database migrations" applies new lib/db/migrations to Neon
+feature branch ──push──▶ CI: install → generate SQL migrations → migrations on empty Postgres → typecheck → tests → builds
+       │                 (auto-commits lockfile / new migrations back to the branch)
+       └─ pull request into develop (CI must pass)
+merge to develop ──────▶ Workers Builds deploys the dev site · "Database migrations" updates the dev database
+       └─ pull request develop → main when dev has been checked
+merge to main ─────────▶ Workers Builds deploys the live site · "Database migrations" updates the live database
 ```
 
 Schema changes should be additive (new tables/columns) so the app works whether the deploy or the migration lands first.
@@ -61,7 +69,8 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 
 | Kind | Name | Value |
 |---|---|---|
-| Secret | `NEON_DATABASE_URL` | Neon connection string (used to apply migrations) |
+| Secret | `NEON_DATABASE_URL` | Neon connection string, `main` branch (live) |
+| Secret | `NEON_DEV_DATABASE_URL` | Neon connection string, `dev` branch |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
 

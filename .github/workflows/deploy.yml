@@ -6,13 +6,14 @@ name: Database migrations
 # from lib/db/migrations (generated from lib/db/src/schema and reviewed in PRs).
 #
 # Repository secret (Settings -> Secrets and variables -> Actions):
-#   NEON_DATABASE_URL   Neon connection string for the site's database
+#   NEON_DATABASE_URL       Neon connection string, live site (branch main)
+#   NEON_DEV_DATABASE_URL   Neon "dev" branch connection string (branch develop)
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
@@ -27,15 +28,15 @@ jobs:
     name: Apply database migrations
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'develop' && 'development' || 'production' }}
     env:
-      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      DATABASE_URL: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'develop' && secrets.NEON_DEV_DATABASE_URL || secrets.NEON_DATABASE_URL }}
     steps:
       - name: Check secret
         id: ready
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::notice::NEON_DATABASE_URL secret not set — skipping migrations."
+            echo "::notice::database secret for this branch not set — skipping migrations."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"

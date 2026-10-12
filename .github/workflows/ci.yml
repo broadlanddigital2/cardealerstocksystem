@@ -52,10 +52,10 @@ jobs:
           cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || '' }}
 
       - name: Install dependencies
-        # main must install exactly what's locked; feature branches may update
+        # main and develop must install exactly what's locked; feature branches may update
         # the lockfile (the change is committed back below).
         run: |
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_REF" = "refs/heads/develop" ]; then
             pnpm install --frozen-lockfile
           else
             pnpm install --no-frozen-lockfile
@@ -70,7 +70,7 @@ jobs:
       # Commit generated files (lockfile on first run, new migrations) back to
       # feature branches so every later run uses exactly the same inputs.
       - name: Commit generated files
-        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop'
         run: |
           if [ -n "$(git status --porcelain pnpm-lock.yaml lib/db/migrations)" ]; then
             git config user.name "github-actions[bot]"
@@ -80,8 +80,8 @@ jobs:
             git push
           fi
 
-      - name: Fail if generated files are out of date on main
-        if: github.ref == 'refs/heads/main'
+      - name: Fail if generated files are out of date on main / develop
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: git diff --exit-code -- pnpm-lock.yaml lib/db/migrations
 
       - name: Apply migrations to an empty database

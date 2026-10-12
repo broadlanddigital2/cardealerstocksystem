@@ -10,7 +10,8 @@
     "typecheck": "pnpm run typecheck:libs && pnpm --filter @workspace/web run typecheck",
     "test": "pnpm --filter @workspace/web run test",
     "db:push": "pnpm --filter @workspace/db run push",
-    "deploy": "pnpm --filter @workspace/web run deploy"
+    "deploy": "pnpm --filter @workspace/web run deploy",
+    "deploy:dev": "pnpm --filter @workspace/web run deploy:dev"
   },
   "private": true,
   "devDependencies": {
