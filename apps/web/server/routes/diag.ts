@@ -34,7 +34,6 @@ router.get("/_diag", async (req, res): Promise<void> => {
   res.json({
     env: {
       DATABASE_URL: present("DATABASE_URL"),
-      SUPABASE_URL: present("SUPABASE_URL"),
       SENDGRID_API_KEY: present("SENDGRID_API_KEY"),
       CRON_SECRET: true,
     },

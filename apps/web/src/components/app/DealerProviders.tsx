@@ -18,7 +18,8 @@ function QueryCacheResetOnUserChange() {
   return null;
 }
 
-// Attach a fresh Supabase access token to every generated-API request.
+// Generated-API requests are authenticated by the session cookie; getToken()
+// returns null, so no Authorization header is added.
 function ApiAuthTokenRegistrar() {
   const { getToken } = useAuth();
   useEffect(() => {

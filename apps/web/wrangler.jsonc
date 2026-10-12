@@ -33,7 +33,6 @@
   // with `wrangler secret put` or in the Cloudflare dashboard.
   "vars": {
     "APP_URL": "https://cardealerstockbook.racecargraphics.uk",
-    "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
     // Email goes out via the SendGrid API (secret: SENDGRID_API_KEY). The
     // from-address must be a verified sender / authenticated domain in SendGrid.
     // Testing sender; change to the dealer domain (and authenticate it in SendGrid) for go-live.
@@ -62,7 +61,6 @@
       },
       "vars": {
         "APP_URL": "https://dev-cardealerstockbook.racecargraphics.uk",
-        "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
         "ENQUIRY_EMAIL_FROM": "noreply@racecargraphics.uk",
         "EMAIL_FROM_NAME": "MotorMetric (dev)",
         "RAPID_CAR_CHECK_DOMAIN": "motormetric-mg.co.uk"

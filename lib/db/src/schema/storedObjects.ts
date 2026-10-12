@@ -2,7 +2,7 @@ import { pgTable, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 
 // Access-control records for uploaded files (logos, showroom photos, feature
 // icons). Replaces the "custom:aclPolicy" object metadata the Replit/GCS
-// storage used: the bytes live in Supabase Storage, and a row here marks an
+// storage used: the bytes live in Cloudflare R2, and a row here marks an
 // upload as finalised with its visibility. Uploads with no row are orphans and
 // are swept after 30 minutes.
 export const storedObjectsTable = pgTable("stored_objects", {
