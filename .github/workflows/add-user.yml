@@ -1,0 +1,41 @@
+name: Add staff user
+
+# Run by hand (Actions -> "Add staff user" -> Run workflow) to let someone sign
+# in, or to change their role. Writes to the database in NEON_DATABASE_URL.
+# Staff can also be invited from Settings -> Users once an admin is signed in.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Email address"
+        required: true
+        type: string
+      role:
+        description: "Role"
+        required: true
+        type: choice
+        options: [admin, user]
+        default: user
+
+permissions:
+  contents: read
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      EMAIL: ${{ inputs.email }}
+      ROLE: ${{ inputs.role }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Add user
+        run: .github/scripts/step.sh "Add staff user" node lib/db/scripts/add-user.mjs

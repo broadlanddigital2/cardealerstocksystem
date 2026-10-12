@@ -62,7 +62,6 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 | Kind | Name | Value |
 |---|---|---|
 | Secret | `NEON_DATABASE_URL` | Neon connection string (used to apply migrations) |
-| Secret | `DATABASE_URL` | old Supabase session pooler URI — only for the one-off "Copy data from Supabase to Neon" workflow; delete afterwards |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
 
