@@ -54,8 +54,11 @@
       "r2_buckets": [
         { "binding": "FILES", "bucket_name": "cardealerstocksystem-files-dev" }
       ],
+      // No timers on dev: the account's Workers plan allows 5 cron triggers in
+      // total and the live site uses 3. Run a job by hand when testing with
+      // GET /api/cron/<job> (Authorization: Bearer <CRON_SECRET>).
       "triggers": {
-        "crons": ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"]
+        "crons": []
       },
       "vars": {
         "APP_URL": "https://dev-cardealerstockbook.racecargraphics.uk",
