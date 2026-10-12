@@ -5,9 +5,9 @@ import { db, appUsersTable } from "@workspace/db";
 //
 // This deployment serves ONE dealer. Every signed-in user works on the same
 // shared stock book rather than a private per-user one. We still require a valid
-// Supabase Auth session (so the data is not world-readable/writable), but once a request
+// signed-in session (so the data is not world-readable/writable), but once a request
 // is authenticated we scope all data access to a single shared tenant id instead
-// of the individual Supabase user id.
+// of the individual signed-in user.
 //
 // The shared tenant id defaults to the dealer whose data this app was set up
 // with ("Manor Garage Car Sales Ltd"). It can be overridden per deployment via
@@ -120,7 +120,7 @@ export async function isEmailAllowed(
   return users.has(normalized);
 }
 
-// The real signed-in Supabase Auth user, resolved once per request by the API
+// The real signed-in user (from the session cookie), resolved once per request by the API
 // entry point (server/index.ts) and stored on the request. This is distinct
 // from SHARED_TENANT_ID, which is only the data scope.
 export function getSessionUserId(req: Request): string | null {
@@ -128,7 +128,7 @@ export function getSessionUserId(req: Request): string | null {
 }
 
 // Emails of users verified during this isolate's recent requests, keyed by
-// Supabase user id (filled by server/index.ts from the verified session).
+// user id (filled by server/index.ts from the verified session).
 const sessionEmails = new Map<string, string | null>();
 
 export function rememberSessionEmail(userId: string, email: string | null): void {

@@ -5,7 +5,7 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL, ensure the database is provisioned");
 }
 
-// Parse the URL so we can control TLS: Supabase requires SSL, but its pooler
+// Parse the URL so we can control TLS: hosted Postgres (Neon) requires SSL, but its
 // certificate chain isn't in Node's default store, and newer `pg` treats
 // `sslmode=require` as full verification. Encrypt without chain verification
 // (same as the app's runtime pool).

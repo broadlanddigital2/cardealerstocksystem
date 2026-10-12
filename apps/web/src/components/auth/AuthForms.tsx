@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "@/lib/router";
-import { getSupabase, useSession } from "@/lib/auth";
+import { useSession } from "@/lib/auth";
 
 const logoUrl = "/assets/motormetric-logo.png";
 
@@ -40,11 +40,6 @@ function ErrorText({ message }: { message: string | null }) {
   );
 }
 
-function friendly(message: string): string {
-  if (/rate limit/i.test(message)) return "Too many attempts. Please wait a minute and try again.";
-  return message;
-}
-
 // Send signed-in users straight into the app.
 function useRedirectIfSignedIn(to = "/stock") {
   const { session, isLoaded } = useSession();
@@ -57,6 +52,7 @@ function useRedirectIfSignedIn(to = "/stock") {
 export function SignInForm() {
   useRedirectIfSignedIn();
   const [, setLocation] = useLocation();
+  const { refresh } = useSession();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -84,7 +80,7 @@ export function SignInForm() {
       setEmail(address);
       setCode("");
       setStep("code");
-      setNotice(`If ${address} has been invited, a sign-in code is on its way. It expires in 1 hour.`);
+      setNotice(`If ${address} has been invited, a sign-in code is on its way. It expires in 10 minutes.`);
     } catch {
       setError("We couldn't send a code. Check your connection and try again.");
     } finally {
@@ -95,17 +91,30 @@ export function SignInForm() {
   async function verifyCode(e: FormEvent) {
     e.preventDefault();
     const token = code.replace(/\D/g, "");
-    if (token.length < 6 || token.length > 10) {
-      setError("Enter the code from the email.");
+    if (token.length !== 6) {
+      setError("Enter the 6-digit code from the email.");
       return;
     }
     setBusy(true);
     setError(null);
-    const { error } = await getSupabase().auth.verifyOtp({ email, token, type: "email" });
-    setBusy(false);
-    if (error) {
-      setError(/expired|invalid/i.test(error.message) ? "That code is wrong or has expired. Check the latest email, or send a new code." : friendly(error.message));
+    try {
+      const res = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ email, code: token }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "That code is wrong or has expired. Send a new code and try again.");
+        return;
+      }
+      await refresh();
+    } catch {
+      setError("We couldn't check the code. Check your connection and try again.");
       return;
+    } finally {
+      setBusy(false);
     }
     setLocation("/stock", { replace: true });
   }
@@ -133,17 +142,17 @@ export function SignInForm() {
               inputMode="numeric"
               autoComplete="one-time-code"
               pattern="[0-9 ]*"
-              maxLength={10}
+              maxLength={6}
               autoFocus
               required
-              placeholder="12345678"
+              placeholder="123456"
               className="text-center text-2xl tracking-[0.4em] font-semibold"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
             />
           </div>
           <ErrorText message={error} />
-          <Button type="submit" className="w-full" disabled={busy || code.length < 6}>
+          <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Sign in
           </Button>
           <button
@@ -175,8 +184,8 @@ export function SignInForm() {
   );
 }
 
-// Landing page for email links. supabase-js exchanges the ?code= for a session
-// automatically (PKCE); we just wait for it and move on.
+// Old email-link landing page (sign-in is by code now): send signed-in users
+// on, and everyone else to the sign-in page.
 export function AuthCallback() {
   const { session, isLoaded } = useSession();
   const [, setLocation] = useLocation();

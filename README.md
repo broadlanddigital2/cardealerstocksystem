@@ -2,7 +2,7 @@
 
 UK second-hand motor dealer stock book for accountants' motor-trade clients. Tracks vehicles from purchase to sale, applies the VAT Margin Scheme (Second-hand Goods) automatically, and produces branded margin-scheme invoices, reports and exports. Includes a public showroom website for the dealer.
 
-**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Neon** (Postgres, London) · **Cloudflare R2** (files) · Supabase Auth (sign-in only, to be replaced) · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
+**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Neon** (Postgres, London) · **Cloudflare R2** (files) · sign-in built in (emailed code) · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
 
 ## Layout
 
@@ -13,7 +13,7 @@ UK second-hand motor dealer stock book for accountants' motor-trade clients. Tra
 | `apps/web/server/` | API: route modules (`routes/`), business logic (`lib/`), auth (`middlewares/`), tests (`test/`) |
 | `apps/web/server/http.ts` | Small Express-style router running on Web `Request`/`Response` |
 | `apps/web/middleware.ts` | Customer-domain → showroom rewrite |
-| `apps/web/src/lib/auth.tsx` | Supabase Auth client + hooks; 6-digit code sign-in in `src/components/auth` |
+| `apps/web/src/lib/auth.tsx` | Session hooks (cookie session); 6-digit code sign-in in `src/components/auth`, server side in `server/lib/session.ts` + `server/routes/authCode.ts` |
 | `apps/web/worker.ts` | Cloudflare entry: OpenNext worker + cron (`scheduled`) handler |
 | `lib/db/` | Drizzle schema (source of truth), generated SQL `migrations/`, and `client.ts` — Drizzle over Neon's serverless driver (queries over HTTPS, transactions over a short-lived WebSocket) |
 | `lib/api-spec/` | OpenAPI spec → generated `lib/api-zod` + `lib/api-client-react` (Orval) |
@@ -85,20 +85,14 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 
 Live URL (temporary): **https://cardealerstockbook.racecargraphics.uk** — set in `apps/web/wrangler.jsonc` → `routes`.
 
-Database: Neon project in London (`aws-eu-west-2`). Supabase project **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`) is now used for sign-in only.
-
-**Supabase Auth settings** (dashboard → Authentication):
-- **Emails → Templates:** set the **Magic Link** and **Confirm signup** templates to [`docs/supabase-email/sign-in-code.html`](docs/supabase-email/sign-in-code.html) (subject "Your MotorMetric sign-in code"). It shows the 6-digit `{{ .Token }}` instead of a link.
-- **Sign In / Providers → Email:** keep Email enabled; *Email OTP length* = 6.
-- **URL Configuration:** Site URL = `https://cardealerstockbook.racecargraphics.uk`; Redirect URLs = `https://cardealerstockbook.racecargraphics.uk/**` and `http://localhost:3000/**`.
-- **Emails → SMTP Settings:** enable custom SMTP with SendGrid — host `smtp.sendgrid.net`, port `587`, username `apikey`, password = a SendGrid API key, sender `noreply@racecargraphics.uk`, sender name `MotorMetric`. Supabase's built-in sender only delivers to your own team and is heavily rate-limited, so sign-in codes need this. Also raise *Rate Limits → emails per hour*.
+Database: Neon project in London (`aws-eu-west-2`), branches `production` (live) and `dev`.
 
 **SendGrid:** authenticate the `racecargraphics.uk` domain (testing; switch to the dealer domain for go-live) (Settings → Sender Authentication) by adding the CNAME records it gives you in Cloudflare DNS, then create an API key with *Mail Send* access. The app uses SendGrid's HTTPS API (works on Workers); SMTP via `SMTP_*` remains as a fallback.
 
 ## Notes
 
 - **VAT Margin Scheme:** margin = sale − purchase; VAT due = ⅙ of margin when margin > 0, else £0.
-- **Sign-in:** passwordless — staff enter their email, `POST /api/auth/send-code` asks Supabase Auth to email a 6-digit code (only for invited emails), and the browser verifies it with `supabase.auth.verifyOtp`. The browser then sends its access token to `/api/*`, which verifies it with Supabase.
+- **Sign-in:** passwordless and handled by the site itself — `POST /api/auth/send-code` emails a 6-digit code through SendGrid (invited emails only; 10 minutes, 5 tries, single use, only a salted hash is stored), `POST /api/auth/verify-code` creates a 30-day session and sets an HttpOnly `stockbook_session` cookie (only its SHA-256 is stored, in `auth_sessions`). `/api/*` changes from other websites are refused (Origin check).
 - **Single-dealer mode:** every invited user works on one shared stock book (`SHARED_TENANT_ID`). Codes are only sent to emails in the `app_users` table (Settings → Users), the `ALLOWED_EMAILS`/`ADMIN_EMAILS` backstops, or the hardcoded operator list.
 - **Two web addresses, one deployment:** hosts in `NEXT_PUBLIC_SHOWROOM_HOSTS` only ever see the public showroom at `/`; other hosts get the dealer app with the showroom under `/showroom`.
 - **Files:** stored in Cloudflare R2 (bucket `cardealerstocksystem-files`, binding `FILES`). The browser uploads to `/api/storage/uploads/direct/<id>` with a short-lived signed token; access policy lives in `stored_objects`; files are served via `/api/storage/objects/uploads/<id>`.
