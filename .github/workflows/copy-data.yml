@@ -10,6 +10,9 @@ name: Copy data from Supabase to Neon
 #   NEON_DATABASE_URL   the new Neon database
 
 on:
+  # TEMPORARY: one run from the neon-database branch (removed before merge).
+  push:
+    branches: [neon-database]
   workflow_dispatch:
     inputs:
       overwrite:
