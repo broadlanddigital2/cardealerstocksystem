@@ -1,0 +1,43 @@
+name: Copy data from Supabase to Neon
+
+# One-off, run by hand (Actions -> "Copy data from Supabase to Neon" -> Run
+# workflow). Applies the migrations to the Neon database, then copies every
+# row of every app table from the old Supabase database. Refuses to run if the
+# Neon tables already hold data, unless "overwrite" is ticked.
+#
+# Repository secrets used:
+#   DATABASE_URL        the old Supabase database (session pooler URI)
+#   NEON_DATABASE_URL   the new Neon database
+
+on:
+  workflow_dispatch:
+    inputs:
+      overwrite:
+        description: "Empty the Neon tables first (deletes anything already there)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations to Neon
+        run: .github/scripts/step.sh "Migrations on Neon" pnpm --filter @workspace/db run migrate
+      - name: Copy rows
+        env:
+          OVERWRITE: ${{ inputs.overwrite && '1' || '' }}
+        run: .github/scripts/step.sh "Copy data" node lib/db/scripts/copy-data.mjs

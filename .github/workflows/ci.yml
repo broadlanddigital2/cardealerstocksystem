@@ -27,6 +27,20 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Throwaway Postgres to prove every SQL migration applies cleanly from an
+    # empty database (the same thing a new customer's database goes through).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +83,11 @@ jobs:
       - name: Fail if generated files are out of date on main
         if: github.ref == 'refs/heads/main'
         run: git diff --exit-code -- pnpm-lock.yaml lib/db/migrations
+
+      - name: Apply migrations to an empty database
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: .github/scripts/step.sh "Migrations on empty database" pnpm --filter @workspace/db run migrate
 
       - name: Typecheck
         run: .github/scripts/step.sh Typecheck pnpm run typecheck

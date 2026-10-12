@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { and, eq, desc } from "@workspace/db";
+import { and, eq, desc, isUniqueViolation } from "@workspace/db";
 import { db, invoicesTable, vehiclesTable } from "@workspace/db";
 import {
   CreateVehicleInvoiceBody,
@@ -163,11 +163,7 @@ router.post("/vehicles/:id/invoice", async (req, res): Promise<void> => {
 
     res.status(201).json(serializeInvoice(row));
   } catch (err) {
-    if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505"
-    ) {
+    if (isUniqueViolation(err)) {
       res
         .status(400)
         .json({ error: "Invoice number already exists. Choose another." });

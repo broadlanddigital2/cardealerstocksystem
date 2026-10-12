@@ -2,7 +2,7 @@ import { Router } from "../http";
 import { db } from "@workspace/db";
 
 // GET /_diag?debug=<CRON_SECRET> — operator-only health report: which config is
-// present (never values) and whether Supabase answers within 8 seconds.
+// present (never values) and whether the database answers within 8 seconds.
 const router = new Router();
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -33,8 +33,8 @@ router.get("/_diag", async (req, res): Promise<void> => {
   }
   res.json({
     env: {
+      DATABASE_URL: present("DATABASE_URL"),
       SUPABASE_URL: present("SUPABASE_URL"),
-      SUPABASE_SERVICE_ROLE_KEY: present("SUPABASE_SERVICE_ROLE_KEY"),
       SENDGRID_API_KEY: present("SENDGRID_API_KEY"),
       CRON_SECRET: true,
     },

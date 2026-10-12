@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { and, eq, ne, like, equalsIgnoreCase } from "@workspace/db";
+import { and, eq, ne, like, equalsIgnoreCase, pgError } from "@workspace/db";
 import { z } from "zod/v4";
 import { db, vehiclesTable, dealerSettingsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -415,8 +415,8 @@ router.post("/cazoo/import", async (req, res): Promise<void> => {
         .returning();
       break;
     } catch (err) {
-      const pgErr = err as { code?: string; constraint?: string };
-      const code = err instanceof Error && "code" in err ? pgErr.code : undefined;
+      const pgErr = pgError(err);
+      const code = pgErr.code;
       if (code === "23505") {
         // Duplicate in-stock registration is a real conflict, not a race —
         // report it cleanly rather than retrying into a 500.
