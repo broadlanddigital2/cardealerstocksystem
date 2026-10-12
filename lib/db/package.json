@@ -14,7 +14,7 @@
     "migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.57.4",
+    "@neondatabase/serverless": "^1.0.0",
     "drizzle-orm": "catalog:",
     "drizzle-zod": "^0.8.3",
     "zod": "catalog:"

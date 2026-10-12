@@ -1,12 +1,12 @@
 name: Database migrations
 
 # Deploys of the app itself are done by Cloudflare Workers Builds (connected to
-# this repo, like our other sites). This workflow keeps the Supabase database
+# this repo, like our other sites). This workflow keeps the Neon database
 # schema in step: after CI passes on main it applies any new SQL migrations
 # from lib/db/migrations (generated from lib/db/src/schema and reviewed in PRs).
 #
 # Repository secret (Settings -> Secrets and variables -> Actions):
-#   DATABASE_URL   Supabase session pooler URI (port 5432)
+#   NEON_DATABASE_URL   Neon connection string for the site's database
 
 on:
   workflow_run:
@@ -29,13 +29,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
     steps:
       - name: Check secret
         id: ready
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::notice::DATABASE_URL secret not set — skipping migrations."
+            echo "::notice::NEON_DATABASE_URL secret not set — skipping migrations."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"

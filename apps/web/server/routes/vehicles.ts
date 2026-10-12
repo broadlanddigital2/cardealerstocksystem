@@ -1,5 +1,5 @@
 import { Router } from "../http";
-import { and, eq, desc, ne, or, gte, lte, equalsIgnoreCase, containsIgnoreCase } from "@workspace/db";
+import { and, eq, desc, ne, or, gte, lte, equalsIgnoreCase, containsIgnoreCase, pgError } from "@workspace/db";
 import { db, vehiclesTable, invoicesTable, dealerSettingsTable, depositRefundsTable, type Condition } from "@workspace/db";
 import {
   CreateVehicleBody,
@@ -184,14 +184,7 @@ function mapVehicleDuplicateError(
   err: unknown,
   res: import("../http").Response,
 ): boolean {
-  const code =
-    err instanceof Error && "code" in err
-      ? (err as { code?: string }).code
-      : undefined;
-  const constraint =
-    err instanceof Error && "constraint" in err
-      ? (err as { constraint?: string }).constraint
-      : undefined;
+  const { code, constraint } = pgError(err);
   if (code !== "23505") return false;
   if (constraint === "invoices_user_invoice_number_idx") {
     res.status(400).json({ error: "Invoice number already exists. Choose another." });
@@ -386,14 +379,7 @@ router.post("/vehicles", async (req, res): Promise<void> => {
         .returning();
       break;
     } catch (err) {
-      const code =
-        err instanceof Error && "code" in err
-          ? (err as { code?: string }).code
-          : undefined;
-      const constraint =
-        err instanceof Error && "constraint" in err
-          ? (err as { constraint?: string }).constraint
-          : undefined;
+      const { code, constraint } = pgError(err);
       // Auto-allocated purchase numbers can race under concurrency; retry with
       // a freshly computed number a few times before surfacing the error.
       if (

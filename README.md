@@ -2,7 +2,7 @@
 
 UK second-hand motor dealer stock book for accountants' motor-trade clients. Tracks vehicles from purchase to sale, applies the VAT Margin Scheme (Second-hand Goods) automatically, and produces branded margin-scheme invoices, reports and exports. Includes a public showroom website for the dealer.
 
-**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Supabase** (Postgres via its HTTPS API, Auth) · **Cloudflare R2** (files) · Supabase Auth · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
+**Stack:** Next.js 15 (App Router) on **Cloudflare Workers** (via OpenNext) · **Neon** (Postgres, London) · **Cloudflare R2** (files) · Supabase Auth (sign-in only, to be replaced) · Drizzle ORM · pnpm workspaces · GitHub Actions CI/CD.
 
 ## Layout
 
@@ -15,7 +15,7 @@ UK second-hand motor dealer stock book for accountants' motor-trade clients. Tra
 | `apps/web/middleware.ts` | Customer-domain → showroom rewrite |
 | `apps/web/src/lib/auth.tsx` | Supabase Auth client + hooks; 6-digit code sign-in in `src/components/auth` |
 | `apps/web/worker.ts` | Cloudflare entry: OpenNext worker + cron (`scheduled`) handler |
-| `lib/db/` | Drizzle schema (source of truth), generated SQL `migrations/`, and `supabaseDb.ts` — the data layer that runs Drizzle-style queries over Supabase's HTTPS API (no Postgres connection from the app) |
+| `lib/db/` | Drizzle schema (source of truth), generated SQL `migrations/`, and `client.ts` — Drizzle over Neon's serverless driver (queries over HTTPS, transactions over a short-lived WebSocket) |
 | `lib/api-spec/` | OpenAPI spec → generated `lib/api-zod` + `lib/api-client-react` (Orval) |
 | `lib/report-calc/` | Pure VAT / report / Xero export maths (unit-tested) |
 
@@ -39,7 +39,7 @@ feature branch ──push──▶ GitHub Actions CI: install → generate SQL m
                          (auto-commits lockfile / new migrations back to the branch)
 pull request ───────────▶ CI must pass
 merge to main ──────────▶ Cloudflare Workers Builds: build + deploy the Worker (same as our other sites)
-                └───────▶ GitHub Actions: CI ──▶ "Database migrations" applies new lib/db/migrations to Supabase
+                └───────▶ GitHub Actions: CI ──▶ "Database migrations" applies new lib/db/migrations to Neon
 ```
 
 Schema changes should be additive (new tables/columns) so the app works whether the deploy or the migration lands first.
@@ -61,13 +61,13 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 
 | Kind | Name | Value |
 |---|---|---|
-| Secret | `DATABASE_URL` | Supabase **session pooler** URI (port 5432) |
+| Secret | `NEON_DATABASE_URL` | Neon connection string (used to apply migrations) |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
 
 | Secret | Value |
 |---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API keys → `service_role` / secret key |
+| `DATABASE_URL` | Neon connection string (same as `NEON_DATABASE_URL`) |
 | `CRON_SECRET` | any long random string |
 | `SENDGRID_API_KEY` | SendGrid API key (Mail Send) — used for enquiry alerts, staff invites, Cazoo alerts |
 | `RAPID_CAR_CHECK_API_KEY` | optional — registration lookup |
@@ -76,7 +76,7 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 
 Live URL (temporary): **https://cardealerstockbook.racecargraphics.uk** — set in `apps/web/wrangler.jsonc` → `routes`.
 
-Supabase project: **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`, eu-west-2). Tables and RLS are already created.
+Database: Neon project in London (`aws-eu-west-2`). Supabase project **Car Dealer Stock Book** (`bvtqaehyqchyoaleiggw`) is now used for sign-in only.
 
 **Supabase Auth settings** (dashboard → Authentication):
 - **Emails → Templates:** set the **Magic Link** and **Confirm signup** templates to [`docs/supabase-email/sign-in-code.html`](docs/supabase-email/sign-in-code.html) (subject "Your MotorMetric sign-in code"). It shows the 6-digit `{{ .Token }}` instead of a link.
