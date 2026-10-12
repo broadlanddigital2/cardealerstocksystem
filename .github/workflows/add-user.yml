@@ -1,7 +1,8 @@
 name: Add staff user
 
 # Run by hand (Actions -> "Add staff user" -> Run workflow) to let someone sign
-# in, or to change their role. Writes to the database in NEON_DATABASE_URL.
+# in, or to change their role. Writes to the live (NEON_DATABASE_URL) or dev
+# (NEON_DEV_DATABASE_URL) database.
 # Staff can also be invited from Settings -> Users once an admin is signed in.
 
 on:
@@ -11,6 +12,12 @@ on:
         description: "Email address"
         required: true
         type: string
+      site:
+        description: "Which site"
+        required: true
+        type: choice
+        options: [live, dev]
+        default: live
       role:
         description: "Role"
         required: true
@@ -24,9 +31,9 @@ permissions:
 jobs:
   add:
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ inputs.site == 'dev' && 'development' || 'production' }}
     env:
-      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      DATABASE_URL: ${{ inputs.site == 'dev' && secrets.NEON_DEV_DATABASE_URL || secrets.NEON_DATABASE_URL }}
       EMAIL: ${{ inputs.email }}
       ROLE: ${{ inputs.role }}
     steps:

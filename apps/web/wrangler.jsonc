@@ -40,5 +40,30 @@
     "ENQUIRY_EMAIL_FROM": "noreply@racecargraphics.uk",
     "EMAIL_FROM_NAME": "MotorMetric",
     "RAPID_CAR_CHECK_DOMAIN": "motormetric-mg.co.uk"
+  },
+
+  // Development copy, deployed from the `develop` branch with
+  // `pnpm run deploy:dev` (Worker "cardealerstocksystem-dev"). Own domain, own
+  // file bucket, own database (Neon "dev" branch, Worker secret DATABASE_URL).
+  // Routes, buckets, triggers and vars are not inherited, so they are repeated.
+  "env": {
+    "dev": {
+      "routes": [
+        { "pattern": "dev-cardealerstockbook.racecargraphics.uk", "custom_domain": true }
+      ],
+      "r2_buckets": [
+        { "binding": "FILES", "bucket_name": "cardealerstocksystem-files-dev" }
+      ],
+      "triggers": {
+        "crons": ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"]
+      },
+      "vars": {
+        "APP_URL": "https://dev-cardealerstockbook.racecargraphics.uk",
+        "SUPABASE_URL": "https://bvtqaehyqchyoaleiggw.supabase.co",
+        "ENQUIRY_EMAIL_FROM": "noreply@racecargraphics.uk",
+        "EMAIL_FROM_NAME": "MotorMetric (dev)",
+        "RAPID_CAR_CHECK_DOMAIN": "motormetric-mg.co.uk"
+      }
+    }
   }
 }
