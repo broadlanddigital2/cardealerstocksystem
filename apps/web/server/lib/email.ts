@@ -350,3 +350,39 @@ export async function sendInviteEmail(
     return false;
   }
 }
+
+export interface SignInCodeDetails {
+  to: string;
+  code: string;
+  businessName?: string;
+}
+
+// Emails a sign-in code. Unlike the notification emails this one must arrive,
+// so failures are thrown for the caller to report.
+export async function sendSignInCode(details: SignInCodeDetails): Promise<void> {
+  const transport = getTransport();
+  const from = getFromAddress();
+  if (!transport || !from) {
+    throw new Error("Email is not configured (SENDGRID_API_KEY / ENQUIRY_EMAIL_FROM).");
+  }
+  const business = details.businessName?.trim() || process.env.EMAIL_FROM_NAME?.trim() || "Stock Book";
+  const subject = `Your ${business} sign-in code: ${details.code}`;
+  const text = [
+    `Your sign-in code is ${details.code}`,
+    ``,
+    `Enter it on the sign-in page. It expires in 10 minutes and can only be used once.`,
+    `If you didn't ask to sign in, you can ignore this email.`,
+    ``,
+    `— ${business}`,
+  ].join("\n");
+  const html = `
+    <div style="font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; line-height: 1.5; max-width: 480px;">
+      <h2 style="margin: 0 0 12px;">Your sign-in code</h2>
+      <p style="margin: 0 0 16px;">Enter this code on the ${escapeHtml(business)} sign-in page:</p>
+      <p style="margin: 0 0 16px; font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: 'Courier New', monospace;">${escapeHtml(details.code)}</p>
+      <p style="margin: 0 0 16px; color: #666; font-size: 13px;">The code expires in 10 minutes and can only be used once. If you didn't ask to sign in, you can ignore this email.</p>
+      <p style="margin: 0; color: #666; font-size: 13px;">— ${escapeHtml(business)}</p>
+    </div>
+  `;
+  await transport.sendMail({ from, to: details.to, subject, text, html });
+}

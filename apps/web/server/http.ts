@@ -34,7 +34,7 @@ export interface Request {
   protocol: string;
   /** Data-scope tenant id, set by requireAuth/requireAdmin. */
   userId?: string;
-  /** Real signed-in Supabase user id, set by the auth layer. */
+  /** Signed-in user id (their email), set from the session cookie. */
   sessionUserId?: string | null;
   log: Logger;
   /** The underlying Web request (for streaming bodies). */

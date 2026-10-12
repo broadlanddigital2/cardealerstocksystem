@@ -17,9 +17,7 @@ permissions:
 
 env:
   # Public, build-time values (Settings -> Secrets and variables -> Actions ->
-  # Variables). Supabase URL/publishable key default to the production project.
-  NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+  # Variables).
   NEXT_PUBLIC_SHOWROOM_HOSTS: ${{ vars.NEXT_PUBLIC_SHOWROOM_HOSTS }}
   NEXT_TELEMETRY_DISABLED: 1
 

@@ -1,11 +1,11 @@
 "use client";
 
-// Supabase Auth for the dealer back office.
+// Sign-in state for the dealer back office.
 //
-// The browser keeps the session (supabase-js handles refresh); every API call
-// sends the current access token as `Authorization: Bearer …`, which the server
-// verifies with Supabase. The hooks below mirror the small surface the views
-// already used (`useAuth().getToken`, `useUser().user`, `useSignOut`).
+// The session lives in an HttpOnly cookie set by /api/auth/verify-code, so the
+// browser sends it with every same-site request automatically and page code
+// never sees the token. The hooks below keep the small surface the views
+// already use (`useAuth().getToken`, `useUser().user`, `useSignOut`).
 import {
   createContext,
   useCallback,
@@ -15,66 +15,67 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./supabaseConfig";
 
-let browserClient: SupabaseClient | null = null;
-
-export function getSupabase(): SupabaseClient {
-  if (!browserClient) {
-    browserClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: {
-        flowType: "pkce",
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: "stockbook-auth",
-      },
-    });
-  }
-  return browserClient;
+export interface Session {
+  email: string;
 }
 
 interface AuthState {
   session: Session | null;
   isLoaded: boolean;
+  /** Re-reads the session from the server (after signing in). */
+  refresh: () => Promise<Session | null>;
 }
 
-const AuthContext = createContext<AuthState>({ session: null, isLoaded: false });
+const AuthContext = createContext<AuthState>({
+  session: null,
+  isLoaded: false,
+  refresh: async () => null,
+});
+
+async function fetchSession(): Promise<Session | null> {
+  try {
+    const res = await fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { signedIn?: boolean; email?: string };
+    return data.signedIn && data.email ? { email: data.email } : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ session: null, isLoaded: false });
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    const supabase = getSupabase();
-    let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setState({ session: data.session, isLoaded: true });
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setState({ session, isLoaded: true });
-    });
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
+  const refresh = useCallback(async () => {
+    const s = await fetchSession();
+    setSession(s);
+    setLoaded(true);
+    return s;
   }, []);
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const value = useMemo(() => ({ session, isLoaded, refresh }), [session, isLoaded, refresh]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useSession(): AuthState {
   return useContext(AuthContext);
 }
 
-/** `getToken()` returns a fresh access token (refreshing if needed), or null. */
+/**
+ * `getToken()` is kept for existing callers. The session travels in a cookie,
+ * so there is no token for page code to attach: it always returns null and
+ * requests are authenticated by the browser automatically.
+ */
 export function useAuth() {
   const { session, isLoaded } = useSession();
-  const getToken = useCallback(async (): Promise<string | null> => {
-    const { data } = await getSupabase().auth.getSession();
-    return data.session?.access_token ?? null;
-  }, []);
-  return { getToken, isLoaded, isSignedIn: Boolean(session), userId: session?.user.id ?? null };
+  const getToken = useCallback(async (): Promise<string | null> => null, []);
+  return { getToken, isLoaded, isSignedIn: Boolean(session), userId: session?.email ?? null };
 }
 
 export interface AppUserProfile {
@@ -86,32 +87,21 @@ export interface AppUserProfile {
 
 export function useUser(): { user: AppUserProfile | null; isLoaded: boolean; isSignedIn: boolean } {
   const { session, isLoaded } = useSession();
-  const user = useMemo<AppUserProfile | null>(() => {
-    const u = session?.user;
-    if (!u) return null;
-    const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-    const fullName =
-      (typeof meta.full_name === "string" && meta.full_name) ||
-      (typeof meta.name === "string" && meta.name) ||
-      null;
-    return {
-      id: u.id,
-      email: u.email ?? null,
-      fullName,
-      firstName: fullName ? fullName.split(" ")[0] ?? null : null,
-    };
-  }, [session]);
+  const user = useMemo<AppUserProfile | null>(
+    () => (session ? { id: session.email, email: session.email, fullName: null, firstName: null } : null),
+    [session],
+  );
   return { user, isLoaded, isSignedIn: Boolean(session) };
 }
 
 export function useSignOut() {
   return useCallback(async (redirectTo = "/") => {
-    await getSupabase().auth.signOut();
+    await fetch("/api/auth/sign-out", { method: "POST", credentials: "same-origin" }).catch(() => {});
     window.location.assign(redirectTo);
   }, []);
 }
 
-/** Absolute URL on this site, for auth email redirect links. */
+/** Absolute URL on this site. */
 export function siteUrl(path: string): string {
   return `${window.location.origin}${path}`;
 }
