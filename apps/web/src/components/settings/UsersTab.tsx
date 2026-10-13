@@ -9,6 +9,7 @@ import {
   type AppUser,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { ROLES_QUERY_KEY, roleName, useRoles } from "./useRoles";
 import {
   Card,
   CardContent,
@@ -55,7 +56,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Loader2, UserPlus, Trash2, ShieldCheck } from "lucide-react";
 
-type Role = "admin" | "user";
+type Role = string;
 
 function errMessage(err: unknown): string {
   const data = (err as { response?: { data?: { error?: string } } })?.response
@@ -70,6 +71,8 @@ export default function UsersTab() {
   const createUser = useCreateAppUser();
   const updateUser = useUpdateAppUser();
   const deleteUser = useDeleteAppUser();
+  const { data: rolesData } = useRoles();
+  const roles = rolesData?.roles ?? [];
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -77,7 +80,10 @@ export default function UsersTab() {
   const [pendingDelete, setPendingDelete] = useState<AppUser | null>(null);
 
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: getListAppUsersQueryKey() });
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListAppUsersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY }),
+    ]);
 
   const handleInvite = async () => {
     const email = inviteEmail.trim();
@@ -102,7 +108,7 @@ export default function UsersTab() {
     try {
       await updateUser.mutateAsync({ id: user.id, data: { role } });
       await invalidate();
-      toast({ title: "Permission updated", description: `${user.email} is now ${role === "admin" ? "an admin" : "a user"}` });
+      toast({ title: "Role updated", description: `${user.email} is now ${roleName(role, roles)}` });
     } catch (err) {
       toast({ title: "Could not update permission", description: errMessage(err), variant: "destructive" });
       await invalidate();
@@ -128,9 +134,9 @@ export default function UsersTab() {
         <div>
           <CardTitle>Users</CardTitle>
           <CardDescription>
-            Invite people to this stock book and set their permission level.
-            Admins can access everything; users can access everything except
-            Reports and Settings. Invited people sign in with the email address
+            Invite people to this stock book and choose their role. Admins can
+            use everything, including Settings. What each other role can use is
+            set on the Roles tab. Invited people sign in with the email address
             you add here.
           </CardDescription>
         </div>
@@ -149,7 +155,7 @@ export default function UsersTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Email</TableHead>
-                <TableHead className="w-[180px]">Permission level</TableHead>
+                <TableHead className="w-[200px]">Role</TableHead>
                 <TableHead className="w-[80px] text-right">Remove</TableHead>
               </TableRow>
             </TableHeader>
@@ -190,12 +196,14 @@ export default function UsersTab() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="user">User</SelectItem>
+                              {roles.map((r) => (
+                                <SelectItem key={r.key} value={r.key}>{r.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         ) : (
                           <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                            {user.role === "admin" ? "Admin" : "User"}
+                            {roleName(user.role, roles)}
                           </Badge>
                         )}
                       </TableCell>
@@ -241,14 +249,16 @@ export default function UsersTab() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="invite-role">Permission level</Label>
+              <Label htmlFor="invite-role">Role</Label>
               <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as Role)}>
                 <SelectTrigger id="invite-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">User — everything except Reports and Settings</SelectItem>
-                  <SelectItem value="admin">Admin — full access</SelectItem>
+                  {roles.map((r) => (
+                    <SelectItem key={r.key} value={r.key}>{r.name}</SelectItem>
+                  ))}
+                  <SelectItem value="admin">Admin — full access, including Settings</SelectItem>
                 </SelectContent>
               </Select>
             </div>

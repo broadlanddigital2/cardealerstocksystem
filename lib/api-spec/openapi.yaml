@@ -1203,7 +1203,8 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, user]
+          minLength: 1
+          description: '"admin", or the key of a role from GET /roles (e.g. "user" for Staff)'
         locked:
           type: boolean
         isSelf:
@@ -1223,7 +1224,8 @@ components:
           minLength: 3
         role:
           type: string
-          enum: [admin, user]
+          minLength: 1
+          description: '"admin", or the key of a role from GET /roles (e.g. "user" for Staff)'
 
     AppUserUpdate:
       type: object
@@ -1232,7 +1234,8 @@ components:
       properties:
         role:
           type: string
-          enum: [admin, user]
+          minLength: 1
+          description: '"admin", or the key of a role from GET /roles (e.g. "user" for Staff)'
 
     Seller:
       type: object

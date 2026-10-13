@@ -1,4 +1,5 @@
 import { Router } from "../http";
+import { roleExists } from "../lib/modules";
 import { eq } from "@workspace/db";
 import { db, appUsersTable, dealerSettingsTable } from "@workspace/db";
 import { CreateAppUserBody, UpdateAppUserBody } from "@workspace/api-zod";
@@ -31,7 +32,7 @@ const PERMANENT_ADMIN_EMAILS = new Set<string>([
 type SerializedUser = {
   id: number;
   email: string;
-  role: "admin" | "user";
+  role: string;
   locked: boolean;
   isSelf: boolean;
   createdAt: string;
@@ -45,7 +46,7 @@ function serialize(
   return {
     id: row.id,
     email: row.email,
-    role: row.role === "admin" ? "admin" : "user",
+    role: row.role || "user",
     locked: PERMANENT_ADMIN_EMAILS.has(email),
     isSelf: currentEmail != null && email === currentEmail,
     createdAt: row.createdAt.toISOString(),
@@ -100,7 +101,11 @@ router.post("/users", async (req, res): Promise<void> => {
     return;
   }
   const email = parsed.data.email.trim().toLowerCase();
-  const role = parsed.data.role === "admin" ? "admin" : "user";
+  const role = parsed.data.role;
+  if (!(await roleExists(role))) {
+    res.status(400).json({ error: "That role doesn't exist. Refresh and try again." });
+    return;
+  }
 
   if (PERMANENT_ADMIN_EMAILS.has(email)) {
     res.status(400).json({ error: "This email is already a permanent admin." });
@@ -136,7 +141,7 @@ router.post("/users", async (req, res): Promise<void> => {
       await sendInviteEmail({
         to: email,
         businessName: settings?.businessName ?? "",
-        role,
+        role: role === "admin" ? "admin" : "user",
       });
     } catch (err) {
       logger.error({ err }, "Failed to dispatch staff invitation email");
@@ -155,7 +160,11 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const role = parsed.data.role === "admin" ? "admin" : "user";
+  const role = parsed.data.role;
+  if (!(await roleExists(role))) {
+    res.status(400).json({ error: "That role doesn't exist. Refresh and try again." });
+    return;
+  }
 
   const [target] = await db
     .select()

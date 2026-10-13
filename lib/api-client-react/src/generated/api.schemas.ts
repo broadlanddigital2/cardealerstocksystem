@@ -57,13 +57,8 @@ export interface FinanceCompanyUpdate {
   email?: string;
 }
 
-export type AppUserRole = typeof AppUserRole[keyof typeof AppUserRole];
-
-
-export const AppUserRole = {
-  admin: 'admin',
-  user: 'user',
-} as const;
+/** "admin", or the key of a role from GET /roles (e.g. "user" for Staff). */
+export type AppUserRole = string;
 
 export interface AppUser {
   id: number;
@@ -74,13 +69,8 @@ export interface AppUser {
   createdAt: string;
 }
 
-export type AppUserInputRole = typeof AppUserInputRole[keyof typeof AppUserInputRole];
-
-
-export const AppUserInputRole = {
-  admin: 'admin',
-  user: 'user',
-} as const;
+/** "admin", or the key of a role from GET /roles (e.g. "user" for Staff). */
+export type AppUserInputRole = string;
 
 export interface AppUserInput {
   /** @minLength 3 */
@@ -88,13 +78,8 @@ export interface AppUserInput {
   role: AppUserInputRole;
 }
 
-export type AppUserUpdateRole = typeof AppUserUpdateRole[keyof typeof AppUserUpdateRole];
-
-
-export const AppUserUpdateRole = {
-  admin: 'admin',
-  user: 'user',
-} as const;
+/** "admin", or the key of a role from GET /roles (e.g. "user" for Staff). */
+export type AppUserUpdateRole = string;
 
 export interface AppUserUpdate {
   role: AppUserUpdateRole;

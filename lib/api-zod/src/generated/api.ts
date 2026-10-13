@@ -1196,7 +1196,7 @@ export const DeleteFinanceCompanyResponse = zod.void()
 export const ListAppUsersResponseItem = zod.object({
   "id": zod.number().int(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'user']),
+  "role": zod.string().min(1),
   "locked": zod.boolean(),
   "isSelf": zod.boolean(),
   "createdAt": zod.string()
@@ -1213,13 +1213,13 @@ export const createAppUserBodyEmailMin = 3;
 
 export const CreateAppUserBody = zod.object({
   "email": zod.string().email().min(createAppUserBodyEmailMin),
-  "role": zod.enum(['admin', 'user'])
+  "role": zod.string().min(1)
 })
 
 export const CreateAppUserResponse = zod.object({
   "id": zod.number().int(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'user']),
+  "role": zod.string().min(1),
   "locked": zod.boolean(),
   "isSelf": zod.boolean(),
   "createdAt": zod.string()
@@ -1234,13 +1234,13 @@ export const UpdateAppUserParams = zod.object({
 })
 
 export const UpdateAppUserBody = zod.object({
-  "role": zod.enum(['admin', 'user'])
+  "role": zod.string().min(1)
 })
 
 export const UpdateAppUserResponse = zod.object({
   "id": zod.number().int(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'user']),
+  "role": zod.string().min(1),
   "locked": zod.boolean(),
   "isSelf": zod.boolean(),
   "createdAt": zod.string()
