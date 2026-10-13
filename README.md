@@ -38,7 +38,7 @@ Two long-lived branches, each with its own site, database and file bucket:
 
 | Branch | Site | Worker | Database | Files |
 |---|---|---|---|---|
-| `develop` | https://dev-cardealerstockbook.racecargraphics.uk | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
+| `develop` | https://dev-cardealerstockbook.racecargraphics.uk (Workers Builds: production branch `develop`, deploy `pnpm run deploy:dev`, build command empty) | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
 | `main` (live) | https://cardealerstockbook.racecargraphics.uk | `cardealerstocksystem` | Neon branch `main` | R2 `cardealerstocksystem-files` |
 
 ```
