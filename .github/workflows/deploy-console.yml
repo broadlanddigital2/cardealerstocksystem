@@ -1,0 +1,96 @@
+name: Deploy console
+
+# The central console (Broadland Digital staff only). After CI passes:
+#   develop -> https://dev-console-stockbook.racecargraphics.uk (Worker stockbook-console-dev)
+#   main    -> https://console-stockbook.racecargraphics.uk     (Worker stockbook-console)
+# Steps: apply the console's database migrations, deploy the Worker, then set
+# its secrets from the GitHub secrets below.
+#
+# Repository secrets:
+#   CONSOLE_DEV_DATABASE_URL / CONSOLE_DATABASE_URL   Neon project "stockbook-console" (dev / production branch)
+#   SENDGRID_API_KEY                                  for sign-in codes
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which console"
+        type: choice
+        options: [dev, live]
+        default: dev
+
+concurrency:
+  group: deploy-console-${{ github.event.workflow_run.head_branch || inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Migrate and deploy console
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IS_DEV: ${{ (github.event.workflow_run.head_branch || (inputs.target == 'live' && 'main' || 'develop')) == 'develop' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+      DEV_DB: ${{ secrets.CONSOLE_DEV_DATABASE_URL }}
+      LIVE_DB: ${{ secrets.CONSOLE_DATABASE_URL }}
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Pick target
+        id: t
+        run: |
+          if [ "$IS_DEV" = "true" ]; then
+            echo "db=$DEV_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy:dev" >> "$GITHUB_OUTPUT"; echo "envflag=--env dev" >> "$GITHUB_OUTPUT"
+            echo "ref=develop" >> "$GITHUB_OUTPUT"; echo "url=https://dev-console-stockbook.racecargraphics.uk" >> "$GITHUB_OUTPUT"
+            [ -n "$DEV_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=$LIVE_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy" >> "$GITHUB_OUTPUT"; echo "envflag=" >> "$GITHUB_OUTPUT"
+            echo "ref=main" >> "$GITHUB_OUTPUT"; echo "url=https://console-stockbook.racecargraphics.uk" >> "$GITHUB_OUTPUT"
+            [ -n "$LIVE_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Not configured yet
+        if: steps.t.outputs.ready != 'true'
+        run: echo "::notice title=Console not deployed::The console database secret for this target isn't set yet."
+      - uses: actions/checkout@v4
+        if: steps.t.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || steps.t.outputs.ref }}
+      - uses: pnpm/action-setup@v4
+        if: steps.t.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.t.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.t.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Console database migrations
+        if: steps.t.outputs.ready == 'true'
+        env:
+          DATABASE_URL: ${{ steps.t.outputs.db }}
+        run: .github/scripts/step.sh "Console migrations" pnpm --filter @workspace/console run migrate
+      - name: Build and deploy console
+        if: steps.t.outputs.ready == 'true'
+        run: .github/scripts/step.sh "Console deploy" pnpm --filter @workspace/console run ${{ steps.t.outputs.script }}
+      - name: Set console secrets
+        if: steps.t.outputs.ready == 'true'
+        working-directory: apps/console
+        env:
+          DATABASE_URL: ${{ steps.t.outputs.db }}
+        run: |
+          node -e 'require("fs").writeFileSync("/tmp/secrets.json", JSON.stringify({DATABASE_URL: process.env.DATABASE_URL, SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || ""}))'
+          ../../.github/scripts/step.sh "Console secrets" pnpm exec wrangler secret bulk /tmp/secrets.json ${{ steps.t.outputs.envflag }}
+          rm -f /tmp/secrets.json
+          echo "::notice title=Console deployed::${{ steps.t.outputs.url }}"
