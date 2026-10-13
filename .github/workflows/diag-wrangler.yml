@@ -1,0 +1,23 @@
+name: Diag wrangler
+on:
+  push:
+    branches: [diag-wrangler]
+jobs:
+  dry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Build like Workers Builds (deploy:dev without the deploy)
+        working-directory: apps/web
+        run: ../../.github/scripts/step.sh "OpenNext build" pnpm exec opennextjs-cloudflare build
+      - name: Dry run dev
+        working-directory: apps/web
+        run: |
+          pnpm exec wrangler deploy --dry-run --env dev --outdir /tmp/out 2>&1 | tee /tmp/dry.txt
+          ls -la /tmp/out
+          tot=$(grep -iE "Total Upload|gzip" /tmp/dry.txt | tail -3 | tr '\n' ' ')
+          echo "::notice title=Upload size::$tot"
