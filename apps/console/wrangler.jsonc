@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Central console: Broadland Digital staff only. Holds the dealer list and
+  // settings, never any dealer's stock or customer data.
+  "name": "stockbook-console",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "routes": [
+    { "pattern": "console-stockbook.racecargraphics.uk", "custom_domain": true }
+  ],
+  // Secrets (set by the "Deploy console" workflow from GitHub secrets):
+  //   DATABASE_URL (console database), SENDGRID_API_KEY
+  "vars": {
+    "APP_URL": "https://console-stockbook.racecargraphics.uk",
+    // Who may sign in (comma-separated).
+    "CONSOLE_ADMIN_EMAILS": "justin@broadlanddigital.co.uk",
+    "EMAIL_FROM": "noreply@racecargraphics.uk",
+    "EMAIL_FROM_NAME": "Stock Book Console"
+  },
+  "env": {
+    "dev": {
+      "routes": [
+        { "pattern": "dev-console-stockbook.racecargraphics.uk", "custom_domain": true }
+      ],
+      "vars": {
+        "APP_URL": "https://dev-console-stockbook.racecargraphics.uk",
+        "CONSOLE_ADMIN_EMAILS": "justin@broadlanddigital.co.uk",
+        "EMAIL_FROM": "noreply@racecargraphics.uk",
+        "EMAIL_FROM_NAME": "Stock Book Console (dev)"
+      }
+    }
+  }
+}

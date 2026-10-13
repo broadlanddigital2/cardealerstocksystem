@@ -67,6 +67,7 @@
     "@workspace/api-client-react": "workspace:*",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/modules": "workspace:*",
     "@workspace/object-storage-web": "workspace:*",
     "@workspace/report-calc": "workspace:*",
     "class-variance-authority": "catalog:",

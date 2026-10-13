@@ -17,6 +17,9 @@
     },
     {
       "path": "./lib/report-calc"
+    },
+    {
+      "path": "./lib/modules"
     }
   ]
 }
