@@ -7,13 +7,14 @@ name: Database migrations
 #
 # Repository secret (Settings -> Secrets and variables -> Actions):
 #   NEON_DATABASE_URL       Neon connection string, live site (branch main)
-#   NEON_DEV_DATABASE_URL   Neon "dev" branch connection string (branch develop)
+#   NEON_DEV_DATABASE_URL   used for a manual run on develop (normal dev migrations
+#                           run in "Deploy dev site")
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
