@@ -1,4 +1,5 @@
 import { Router } from "../http";
+import { requireModule } from "../lib/modules";
 import { and, eq, desc, ne, or, gte, lte, equalsIgnoreCase, containsIgnoreCase, pgError } from "@workspace/db";
 import { db, vehiclesTable, invoicesTable, dealerSettingsTable, depositRefundsTable, type Condition } from "@workspace/db";
 import {
@@ -397,7 +398,7 @@ router.post("/vehicles", async (req, res): Promise<void> => {
   res.status(201).json(serializeVehicle(row!, false));
 });
 
-router.post("/vehicles/import", async (req, res): Promise<void> => {
+router.post("/vehicles/import", requireModule("csv_import"), async (req, res): Promise<void> => {
   const userId = req.userId!;
   const parsed = ImportVehiclesBody.safeParse(req.body);
   if (!parsed.success) {

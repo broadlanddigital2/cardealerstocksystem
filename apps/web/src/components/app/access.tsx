@@ -3,12 +3,30 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth, useSignOut } from "@/lib/auth";
 import { useLocation } from "@/lib/router";
+import { cleanModuleList, type ModuleKey } from "@/lib/modules";
 
 // Verifies the signed-in user is on the dealer's invite list before rendering
 // the app. The backend enforces this too (every data request 403s for
 // non-invited users); this gate just shows a friendly message instead of a
 // broken-looking app full of errors.
-const AccessContext = createContext<{ isAdmin: boolean }>({ isAdmin: false });
+interface Access {
+  /** False outside the signed-in app (e.g. tests, public pages). */
+  loaded: boolean;
+  isAdmin: boolean;
+  /** Modules this user can use (site modules, limited by their role). */
+  modules: ModuleKey[];
+  /** Modules this dealer has (what an admin can hand out to Staff). */
+  siteModules: ModuleKey[];
+  has: (key: ModuleKey) => boolean;
+}
+
+const AccessContext = createContext<Access>({
+  loaded: false,
+  isAdmin: false,
+  modules: [],
+  siteModules: [],
+  has: () => false,
+});
 
 export function useAccess() {
   return useContext(AccessContext);
@@ -20,6 +38,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<"checking" | "allowed" | "denied">("checking");
   const [email, setEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [modules, setModules] = useState<ModuleKey[]>([]);
+  const [siteModules, setSiteModules] = useState<ModuleKey[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +53,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setEmail(data?.email ?? null);
         setIsAdmin(Boolean(data?.isAdmin));
+        setModules(cleanModuleList(data?.modules));
+        setSiteModules(cleanModuleList(data?.siteModules));
         setStatus(data?.allowed ? "allowed" : "denied");
       } catch {
         if (!cancelled) setStatus("denied");
@@ -70,7 +92,14 @@ export function AccessGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AccessContext.Provider value={{ isAdmin }}>{children}</AccessContext.Provider>;
+  const value: Access = {
+    loaded: true,
+    isAdmin,
+    modules,
+    siteModules,
+    has: (key) => modules.includes(key),
+  };
+  return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;
 }
 
 // Restricts a route to admins. Non-admin users are redirected to the stock book.
@@ -85,4 +114,20 @@ export function AdminOnly({ children }: { children: ReactNode }) {
 
   if (!isAdmin) return null;
   return <>{children}</>;
+}
+
+// Restricts a page to users who can use at least one of the given modules.
+// The backend enforces the same rule on the matching API endpoints.
+export function ModuleOnly({ modules, children }: { modules: ModuleKey[]; children: ReactNode }) {
+  const { has } = useAccess();
+  const allowed = modules.some((m) => has(m));
+  if (allowed) return <>{children}</>;
+  return (
+    <div className="max-w-xl mx-auto mt-16 text-center">
+      <h1 className="text-xl font-bold text-slate-900">Not available</h1>
+      <p className="mt-2 text-sm text-slate-500">
+        This part of the stock book isn't switched on for you. If you think you need it, ask your admin.
+      </p>
+    </div>
+  );
 }

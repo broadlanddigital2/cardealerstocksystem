@@ -1,4 +1,5 @@
 import { Router } from "../http";
+import { requireModule } from "../lib/modules";
 import { and, eq, desc } from "@workspace/db";
 import { db, sellersTable } from "@workspace/db";
 import {
@@ -11,7 +12,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router = new Router();
 
-router.use("/sellers", requireAuth);
+router.use("/sellers", requireAuth, requireModule("contacts"));
 
 function serialize(row: typeof sellersTable.$inferSelect) {
   return {

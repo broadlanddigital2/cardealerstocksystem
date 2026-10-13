@@ -68,16 +68,16 @@ function getAdminList(): Set<string> {
 // hitting the DB on every request; mutations call bustUserCache() so changes
 // take effect immediately.
 const USER_CACHE_TTL_MS = 30 * 1000;
-let userCache: { map: Map<string, "admin" | "user">; ts: number } | null = null;
+let userCache: { map: Map<string, string>; ts: number } | null = null;
 
-async function getDbUsers(): Promise<Map<string, "admin" | "user">> {
+async function getDbUsers(): Promise<Map<string, string>> {
   const now = Date.now();
   if (userCache && now - userCache.ts < USER_CACHE_TTL_MS) return userCache.map;
   try {
     const rows = await db.select().from(appUsersTable);
-    const map = new Map<string, "admin" | "user">();
+    const map = new Map<string, string>();
     for (const row of rows) {
-      map.set(row.email.toLowerCase(), row.role === "admin" ? "admin" : "user");
+      map.set(row.email.toLowerCase(), row.role || "user");
     }
     userCache = { map, ts: now };
     return map;
@@ -105,6 +105,17 @@ export async function isEmailAdmin(
   }
   const users = await getDbUsers();
   return users.get(normalized) === "admin";
+}
+
+/**
+ * The user's role key: "admin", or a key from the roles table (default "user",
+ * the Staff role). Only meaningful for invited users.
+ */
+export async function getEmailRole(email: string | null | undefined): Promise<string> {
+  if (!email) return "user";
+  if (await isEmailAdmin(email)) return "admin";
+  const users = await getDbUsers();
+  return users.get(email.toLowerCase()) ?? "user";
 }
 
 export async function isEmailAllowed(

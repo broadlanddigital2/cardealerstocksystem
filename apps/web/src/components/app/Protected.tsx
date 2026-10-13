@@ -4,10 +4,20 @@ import { useEffect, type ReactNode } from "react";
 import { useUser } from "@/lib/auth";
 import AppLayout from "@/components/layout/AppLayout";
 import { useLocation } from "@/lib/router";
-import { AccessGate, AdminOnly } from "./access";
+import { AccessGate, AdminOnly, ModuleOnly } from "./access";
+import type { ModuleKey } from "@/lib/modules";
 
 // Signed-in + invited (+ optionally admin) wrapper for every back-office page.
-export function Protected({ children, adminOnly }: { children: ReactNode; adminOnly?: boolean }) {
+export function Protected({
+  children,
+  adminOnly,
+  modules,
+}: {
+  children: ReactNode;
+  adminOnly?: boolean;
+  /** Page needs at least one of these modules. */
+  modules?: ModuleKey[];
+}) {
   const { isSignedIn, isLoaded } = useUser();
   const [, setLocation] = useLocation();
 
@@ -19,7 +29,15 @@ export function Protected({ children, adminOnly }: { children: ReactNode; adminO
 
   return (
     <AccessGate>
-      <AppLayout>{adminOnly ? <AdminOnly>{children}</AdminOnly> : children}</AppLayout>
+      <AppLayout>
+        {adminOnly ? (
+          <AdminOnly>{children}</AdminOnly>
+        ) : modules ? (
+          <ModuleOnly modules={modules}>{children}</ModuleOnly>
+        ) : (
+          children
+        )}
+      </AppLayout>
     </AccessGate>
   );
 }

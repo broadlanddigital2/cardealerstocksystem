@@ -38,14 +38,14 @@ Two long-lived branches, each with its own site, database and file bucket:
 
 | Branch | Site | Worker | Database | Files |
 |---|---|---|---|---|
-| `develop` | https://dev-cardealerstockbook.racecargraphics.uk | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
+| `develop` | https://dev-cardealerstockbook.racecargraphics.uk (deployed by the GitHub workflow "Deploy dev site"; Cloudflare builds are off for this Worker) | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
 | `main` (live) | https://cardealerstockbook.racecargraphics.uk | `cardealerstocksystem` | Neon branch `main` | R2 `cardealerstocksystem-files` |
 
 ```
 feature branch ──push──▶ CI: install → generate SQL migrations → migrations on empty Postgres → typecheck → tests → builds
        │                 (auto-commits lockfile / new migrations back to the branch)
        └─ pull request into develop (CI must pass)
-merge to develop ──────▶ Workers Builds deploys the dev site · "Database migrations" updates the dev database
+merge to develop ──────▶ CI ──▶ GitHub "Deploy dev site": dev database migrations, then deploy the dev Worker
        └─ pull request develop → main when dev has been checked
 merge to main ─────────▶ Workers Builds deploys the live site · "Database migrations" updates the live database
 ```
@@ -71,6 +71,8 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 |---|---|---|
 | Secret | `NEON_DATABASE_URL` | Neon connection string, `main` branch (live) |
 | Secret | `NEON_DEV_DATABASE_URL` | Neon connection string, `dev` branch |
+| Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare token ("Edit Cloudflare Workers" template) used to deploy the dev site |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
 
@@ -82,6 +84,7 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 | `RAPID_CAR_CHECK_API_KEY` | optional — registration lookup |
 | `FIRECRAWL_API_KEY` | optional — Cazoo import fallback |
 | `ALLOWED_EMAILS` / `ADMIN_EMAILS` | optional backstop allowlists (comma-separated) |
+| `PLATFORM_SECRET` | optional — 32+ character secret that lets Broadland Digital (later the console) set which modules this dealer has via `PUT /api/platform/modules` |
 
 Live URL (temporary): **https://cardealerstockbook.racecargraphics.uk** — set in `apps/web/wrangler.jsonc` → `routes`.
 
@@ -90,6 +93,8 @@ Database: Neon project in London (`aws-eu-west-2`), branches `production` (live)
 **SendGrid:** authenticate the `racecargraphics.uk` domain (testing; switch to the dealer domain for go-live) (Settings → Sender Authentication) by adding the CNAME records it gives you in Cloudflare DNS, then create an API key with *Mail Send* access. The app uses SendGrid's HTTPS API (works on Workers); SMTP via `SMTP_*` remains as a fallback.
 
 ## Notes
+
+- **Modules and roles:** optional parts of the app are modules (`src/lib/modules.ts`): reports, cash sheet, saved contacts, finance sales, showroom website, leads, Cazoo import, spreadsheet import, registration lookup. A dealer has a set of modules (`PUT /api/platform/modules`, Bearer `PLATFORM_SECRET`; default all). Admins can use all of them plus Settings/Users. Other roles live in the `roles` table: **Staff** (key `user`, the default, can be renamed but not deleted) plus any the dealer's admin adds in **Settings → Roles** (e.g. Sales, Accounts), each with its own modules (Staff default: all but Reports). People get a role in **Settings → Users**; deleting a role moves its people to Staff. Menus hide what a user can't use and the matching API endpoints return 403.
 
 - **VAT Margin Scheme:** margin = sale − purchase; VAT due = ⅙ of margin when margin > 0, else £0.
 - **Sign-in:** passwordless and handled by the site itself — `POST /api/auth/send-code` emails a 6-digit code through SendGrid (invited emails only; 10 minutes, 5 tries, single use, only a salted hash is stored), `POST /api/auth/verify-code` creates a 30-day session and sets an HttpOnly `stockbook_session` cookie (only its SHA-256 is stored, in `auth_sessions`). `/api/*` changes from other websites are refused (Origin check).

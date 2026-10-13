@@ -17,6 +17,7 @@ import cazooImportRouter from "./cazooImport";
 import vehicleLookupRouter from "./vehicleLookup";
 import authCodeRouter from "./authCode";
 import diagRouter from "./diag";
+import modulesRouter from "./modules";
 
 const router = new Router();
 
@@ -38,5 +39,6 @@ router.use(cazooImportRouter);
 router.use(vehicleLookupRouter);
 router.use(authCodeRouter);
 router.use(diagRouter);
+router.use(modulesRouter);
 
 export default router;

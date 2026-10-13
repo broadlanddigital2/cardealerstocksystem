@@ -7,7 +7,7 @@ const View = dynamic(() => import("@/views/CashSheet"), { ssr: false });
 
 export default function Page() {
   return (
-    <Protected>
+    <Protected modules={["cash_sheet"]}>
       <View />
     </Protected>
   );

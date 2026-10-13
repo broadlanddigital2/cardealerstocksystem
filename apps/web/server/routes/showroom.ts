@@ -7,6 +7,7 @@ import {
   enquiriesTable,
 } from "@workspace/db";
 import { SHARED_TENANT_ID } from "../middlewares/requireAuth";
+import { requireSiteModule } from "../lib/modules";
 import { serializeShowroomVehicle } from "../lib/vehicleSerializer";
 import { sendEnquiryNotification } from "../lib/email";
 
@@ -66,7 +67,7 @@ async function getDealer(): Promise<DealerSettingsRow | undefined> {
 // public fields only). When the showroom is disabled, returns the dealer with
 // showroomEnabled=false and an empty vehicle list so the frontend can show an
 // "unavailable" state.
-router.get("/showroom", async (_req, res): Promise<void> => {
+router.get("/showroom", requireSiteModule("showroom"), async (_req, res): Promise<void> => {
   const dealer = await getDealer();
   const publicDealer = serializePublicDealer(dealer);
 
@@ -104,7 +105,7 @@ router.get("/showroom", async (_req, res): Promise<void> => {
 // GET /showroom/vehicles/:id — a single published vehicle still shown on the
 // showroom (in stock, or marked sold-on-website). 404 for anything unpublished,
 // fully removed from the showroom, or belonging to another tenant.
-router.get("/showroom/vehicles/:id", async (req, res): Promise<void> => {
+router.get("/showroom/vehicles/:id", requireSiteModule("showroom"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid vehicle id" });
@@ -184,7 +185,7 @@ const HONEYPOT_FIELD = "company";
 // vehicleId is only attached when it refers to a vehicle currently visible on
 // the showroom (published AND either in stock or marked sold-on-website);
 // otherwise it is recorded as a general enquiry.
-router.post("/showroom/enquiries", async (req, res): Promise<void> => {
+router.post("/showroom/enquiries", requireSiteModule("showroom"), async (req, res): Promise<void> => {
   const ip = req.ip ?? "unknown";
   if (rateLimited(ip)) {
     res

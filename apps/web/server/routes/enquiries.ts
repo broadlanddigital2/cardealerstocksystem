@@ -1,4 +1,5 @@
 import { Router } from "../http";
+import { requireModule } from "../lib/modules";
 import { and, eq, desc, inArray } from "@workspace/db";
 import { db, enquiriesTable, vehiclesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -7,7 +8,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 // the public showroom. Scoped to the shared dealer tenant via requireAuth.
 const router = new Router();
 
-router.use("/enquiries", requireAuth);
+router.use("/enquiries", requireAuth, requireModule("leads"));
 
 const ALLOWED_STATUSES = new Set(["new", "read", "archived"]);
 
