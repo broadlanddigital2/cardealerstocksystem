@@ -38,14 +38,14 @@ Two long-lived branches, each with its own site, database and file bucket:
 
 | Branch | Site | Worker | Database | Files |
 |---|---|---|---|---|
-| `develop` | https://dev-cardealerstockbook.racecargraphics.uk (Workers Builds: production branch `develop`, deploy `pnpm run deploy:dev`, build command empty) | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
+| `develop` | https://dev-cardealerstockbook.racecargraphics.uk (deployed by the GitHub workflow "Deploy dev site"; Cloudflare builds are off for this Worker) | `cardealerstocksystem-dev` | Neon branch `dev` | R2 `cardealerstocksystem-files-dev` |
 | `main` (live) | https://cardealerstockbook.racecargraphics.uk | `cardealerstocksystem` | Neon branch `main` | R2 `cardealerstocksystem-files` |
 
 ```
 feature branch ──push──▶ CI: install → generate SQL migrations → migrations on empty Postgres → typecheck → tests → builds
        │                 (auto-commits lockfile / new migrations back to the branch)
        └─ pull request into develop (CI must pass)
-merge to develop ──────▶ Workers Builds deploys the dev site · "Database migrations" updates the dev database
+merge to develop ──────▶ CI ──▶ GitHub "Deploy dev site": dev database migrations, then deploy the dev Worker
        └─ pull request develop → main when dev has been checked
 merge to main ─────────▶ Workers Builds deploys the live site · "Database migrations" updates the live database
 ```
@@ -71,6 +71,8 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 |---|---|---|
 | Secret | `NEON_DATABASE_URL` | Neon connection string, `main` branch (live) |
 | Secret | `NEON_DEV_DATABASE_URL` | Neon connection string, `dev` branch |
+| Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare token ("Edit Cloudflare Workers" template) used to deploy the dev site |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
 
 **Cloudflare → Workers & Pages → cardealerstocksystem → Settings → Variables and secrets** (non-secret config is in `wrangler.jsonc`)
 
