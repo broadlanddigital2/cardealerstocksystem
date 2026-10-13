@@ -1,36 +1,85 @@
 import { Router } from "../http";
-import { requireAdmin } from "../middlewares/requireAuth";
+import { db, appUsersTable } from "@workspace/db";
+import { bustUserCache, requireAdmin } from "../middlewares/requireAuth";
 import {
+  RoleError,
+  createRole,
+  deleteRole,
   getSiteModules,
-  getStaffModules,
+  listRoles,
   setSiteModules,
-  setStaffModules,
+  updateRole,
 } from "../lib/modules";
 
-// GET/PUT /roles            the dealer's admin chooses which of the site's
-//                           modules the Staff role may use (Settings -> Roles).
-// GET/PUT /platform/modules which modules this dealer has. Broadland Digital
-//                           only: Authorization: Bearer <PLATFORM_SECRET>
-//                           (used by the central console; not a dealer setting).
+// Roles (admin only, Settings -> Roles):
+//   GET    /roles             site modules + every role with its modules
+//   POST   /roles             { name, modules }        add a role
+//   PATCH  /roles/:key        { name?, modules? }      rename / change modules
+//   DELETE /roles/:key        its people move to the default Staff role
+// Platform (Broadland Digital only, Authorization: Bearer <PLATFORM_SECRET>):
+//   GET/PUT /platform/modules { enabled: [module keys] }  which modules this dealer has
 const router = new Router();
 
 router.use("/roles", requireAdmin);
 
+async function rolesPayload() {
+  const [siteModules, roles, users] = await Promise.all([
+    getSiteModules(),
+    listRoles(),
+    db.select({ role: appUsersTable.role }).from(appUsersTable),
+  ]);
+  const counts = new Map<string, number>();
+  for (const u of users) counts.set(u.role, (counts.get(u.role) ?? 0) + 1);
+  return {
+    siteModules,
+    roles: roles.map((r) => ({ ...r, userCount: counts.get(r.key) ?? 0 })),
+  };
+}
+
+function sendRoleError(res: import("../http").Response, err: unknown): boolean {
+  if (err instanceof RoleError) {
+    res.status(400).json({ error: err.message });
+    return true;
+  }
+  return false;
+}
+
 router.get("/roles", async (_req, res): Promise<void> => {
-  const [siteModules, staff] = await Promise.all([getSiteModules(), getStaffModules()]);
-  res.json({ siteModules, roles: { admin: siteModules, staff } });
+  res.json(await rolesPayload());
 });
 
-router.put("/roles", async (req, res): Promise<void> => {
-  const body = (req.body ?? {}) as { staff?: unknown };
-  if (!Array.isArray(body.staff)) {
-    res.status(400).json({ error: "Send { staff: [module keys] }." });
-    return;
+router.post("/roles", async (req, res): Promise<void> => {
+  const body = (req.body ?? {}) as { name?: unknown; modules?: unknown };
+  try {
+    await createRole(body.name, body.modules ?? []);
+  } catch (err) {
+    if (sendRoleError(res, err)) return;
+    throw err;
   }
-  const site = await getSiteModules();
-  // Staff can only be given modules the site has.
-  const saved = await setStaffModules(body.staff.filter((k) => site.includes(k as never)));
-  res.json({ siteModules: site, roles: { admin: site, staff: saved } });
+  res.status(201).json(await rolesPayload());
+});
+
+router.patch("/roles/:key", async (req, res): Promise<void> => {
+  const body = (req.body ?? {}) as { name?: unknown; modules?: unknown };
+  try {
+    await updateRole(req.params.key!, { name: body.name, modules: body.modules });
+  } catch (err) {
+    if (sendRoleError(res, err)) return;
+    throw err;
+  }
+  res.json(await rolesPayload());
+});
+
+router.delete("/roles/:key", async (req, res): Promise<void> => {
+  let moved = 0;
+  try {
+    moved = await deleteRole(req.params.key!);
+    bustUserCache();
+  } catch (err) {
+    if (sendRoleError(res, err)) return;
+    throw err;
+  }
+  res.json({ ...(await rolesPayload()), moved });
 });
 
 function platformAuthorised(header: string | undefined): boolean {

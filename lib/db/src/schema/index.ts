@@ -28,3 +28,4 @@ export * from "./enquiries";
 export * from "./appUsers";
 export * from "./storedObjects";
 export * from "./auth";
+export * from "./roles";

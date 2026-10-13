@@ -1,6 +1,6 @@
 import { Router } from "../http";
-import { getSessionUserId, getUserEmail, isEmailAllowed, isEmailAdmin } from "../middlewares/requireAuth";
-import { getSiteModules, modulesFor } from "../lib/modules";
+import { getEmailRole, getSessionUserId, getUserEmail, isEmailAllowed, isEmailAdmin } from "../middlewares/requireAuth";
+import { getSiteModules, listRoles, modulesForRole } from "../lib/modules";
 
 // Reports whether the currently signed-in user is allowed into the shared stock
 // book, and which modules they can use. Unlike the rest of the API this route
@@ -20,10 +20,18 @@ router.get("/access", async (req, res) => {
     isEmailAllowed(email),
     isEmailAdmin(email),
   ]);
-  const [modules, siteModules] = allowed
-    ? await Promise.all([modulesFor(isAdmin), getSiteModules()])
-    : [[], []];
-  res.json({ email, allowed, isAdmin, modules, siteModules });
+  if (!allowed) {
+    res.json({ email, allowed, isAdmin, modules: [], siteModules: [], role: null, roleName: null });
+    return;
+  }
+  const role = await getEmailRole(email);
+  const [modules, siteModules, roles] = await Promise.all([
+    modulesForRole(role),
+    getSiteModules(),
+    listRoles(),
+  ]);
+  const roleName = role === "admin" ? "Admin" : (roles.find((r) => r.key === role) ?? roles.find((r) => r.isDefault))?.name ?? "Staff";
+  res.json({ email, allowed, isAdmin, modules, siteModules, role, roleName });
 });
 
 export default router;
