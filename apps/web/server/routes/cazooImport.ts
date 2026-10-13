@@ -1,4 +1,5 @@
 import { Router } from "../http";
+import { requireModule } from "../lib/modules";
 import { and, eq, ne, like, equalsIgnoreCase, pgError } from "@workspace/db";
 import { z } from "zod/v4";
 import { db, vehiclesTable, dealerSettingsTable } from "@workspace/db";
@@ -19,7 +20,7 @@ const router = new Router();
 
 // All signed-in invited users (admin AND user) may run Cazoo imports — the
 // user asked for both access levels to have it (02/07/2026).
-router.use("/cazoo", requireAuth);
+router.use("/cazoo", requireAuth, requireModule("cazoo_import"));
 
 const objectStorageService = new ObjectStorageService();
 

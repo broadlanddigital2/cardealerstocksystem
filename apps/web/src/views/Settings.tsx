@@ -20,6 +20,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Loader2, Upload, Image as ImageIcon, ChevronUp, ChevronDown } from "lucide-react";
 import Import from "@/views/Import";
 import UsersTab from "@/components/settings/UsersTab";
+import RolesTab from "@/components/settings/RolesTab";
+import { useAccess } from "@/components/app/access";
 import {
   defaultShowroomIntro,
   DEFAULT_ABOUT_TITLE,
@@ -63,6 +65,7 @@ const MARGIN_SCHEME_WORDING =
   "Margin Scheme – Second-hand Goods. No VAT is separately charged or reclaimable on this invoice.";
 
 export default function Settings() {
+  const { has } = useAccess();
   const { data: settings, isLoading } = useGetSettings();
   const updateSettings = useUpdateSettings();
   const queryClient = useQueryClient();
@@ -293,9 +296,10 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="profile">Business Details</TabsTrigger>
           <TabsTrigger value="codes">Account Codes</TabsTrigger>
-          <TabsTrigger value="showroom">Website</TabsTrigger>
+          {has("showroom") && <TabsTrigger value="showroom">Website</TabsTrigger>}
           <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="import">Import</TabsTrigger>
+          <TabsTrigger value="roles">Roles</TabsTrigger>
+          {(has("csv_import") || has("cazoo_import")) && <TabsTrigger value="import">Import</TabsTrigger>}
         </TabsList>
         <TabsContent value="profile" className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1000,6 +1004,9 @@ export default function Settings() {
         </TabsContent>
         <TabsContent value="users" className="mt-4">
           <UsersTab />
+        </TabsContent>
+        <TabsContent value="roles" className="mt-4">
+          <RolesTab />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <Import />

@@ -7,7 +7,7 @@ const View = dynamic(() => import("@/views/Reports"), { ssr: false });
 
 export default function Page() {
   return (
-    <Protected adminOnly>
+    <Protected modules={["reports"]}>
       <View />
     </Protected>
   );

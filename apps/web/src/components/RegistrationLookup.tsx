@@ -3,6 +3,7 @@ import { useLookupVehicle, type VehicleLookup } from "@workspace/api-client-reac
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
+import { useAccess } from "@/components/app/access";
 
 export type RegistrationLookupFields = {
   make?: string | null;
@@ -87,6 +88,9 @@ export const RegistrationLookup = forwardRef<HTMLInputElement, RegistrationLooku
   "aria-invalid": ariaInvalid,
   onBlur: externalOnBlur,
 }, ref) {
+  const access = useAccess();
+  // Registration lookup is a module; outside the signed-in app it stays on.
+  const lookupEnabled = !access.loaded || access.has("reg_lookup");
   const lookup = useLookupVehicle();
   const [status, setStatus] = useState<LookupStatus>("idle");
   const [message, setMessage] = useState("");
@@ -238,17 +242,19 @@ export const RegistrationLookup = forwardRef<HTMLInputElement, RegistrationLooku
           onChange={(event) => handleChange(event.target.value)}
           onBlur={(event) => {
             externalOnBlur?.(event);
-            if (userChanged.current && isValidRegistration(value) && registrationLookupKey(value) !== lastRequested.current) void performLookup();
+            if (lookupEnabled && userChanged.current && isValidRegistration(value) && registrationLookupKey(value) !== lastRequested.current) void performLookup();
           }}
           className="uppercase"
           aria-label="Registration number"
           aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
         />
-        <Button type="button" variant="outline" onClick={() => void performLookup()} disabled={status === "loading" || !isValidRegistration(value)}>
-          {status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          {status === "error" ? "Retry" : "Look up"}
-        </Button>
+        {lookupEnabled && (
+          <Button type="button" variant="outline" onClick={() => void performLookup()} disabled={status === "loading" || !isValidRegistration(value)}>
+            {status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            {status === "error" ? "Retry" : "Look up"}
+          </Button>
+        )}
       </div>
       {status !== "idle" && (
         <p className={`text-xs ${statusClass}`} role="status">

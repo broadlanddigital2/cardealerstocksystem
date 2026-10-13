@@ -7,7 +7,7 @@ const View = dynamic(() => import("@/views/Leads"), { ssr: false });
 
 export default function Page() {
   return (
-    <Protected>
+    <Protected modules={["leads"]}>
       <View />
     </Protected>
   );

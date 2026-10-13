@@ -7,7 +7,7 @@ const View = dynamic(() => import("@/views/Sellers"), { ssr: false });
 
 export default function Page() {
   return (
-    <Protected>
+    <Protected modules={["contacts"]}>
       <View />
     </Protected>
   );

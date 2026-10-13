@@ -7,7 +7,7 @@ const View = dynamic(() => import("@/views/Import"), { ssr: false });
 
 export default function Page() {
   return (
-    <Protected>
+    <Protected modules={["csv_import", "cazoo_import"]}>
       <View />
     </Protected>
   );

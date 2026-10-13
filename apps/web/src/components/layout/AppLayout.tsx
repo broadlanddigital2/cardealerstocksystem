@@ -38,7 +38,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const signOut = useSignOut();
   const { user } = useUser();
   const { getToken } = useAuth();
-  const { isAdmin } = useAccess();
+  const { isAdmin, has } = useAccess();
   const { data: settings } = useGetSettings();
   const basePath = "";
 
@@ -46,6 +46,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // sync as leads are marked read/archived there.
   const { data: leads = [] } = useQuery<Array<{ status: string }>>({
     queryKey: ["enquiries"],
+    enabled: has("leads"),
     queryFn: async () => {
       const token = await getToken();
       const res = await fetch(`${basePath}/api/enquiries`, {
@@ -60,16 +61,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const navigation: NavItem[] = [
     { name: "Stock Book", href: "/stock", icon: Car },
     { name: "Add Vehicle", href: "/vehicles/new", icon: PlusCircle },
-    { name: "Leads", href: "/leads", icon: Inbox, badge: newLeadCount },
-    // Website link only shows when the public website is enabled in Settings.
-    ...(settings?.showroomEnabled ? [{ name: "Website", href: `${basePath}/showroom`, icon: Globe, external: true }] : []),
-    // Reports is admin-only.
-    ...(isAdmin ? [{ name: "Reports", href: "/reports", icon: FileText }] : []),
-    { name: "Cash Sheet", href: "/cash-sheet", icon: Banknote },
-    { name: "Saved Contacts", href: "/saved-contacts", icon: Users },
-    // Import (Cazoo/CSV) is available to all invited users.
-    { name: "Import", href: "/import", icon: Download },
-    // Settings is admin-only.
+    // Each item below shows only when the user's modules include it
+    // (site modules, limited by role; see src/lib/modules.ts).
+    ...(has("leads") ? [{ name: "Leads", href: "/leads", icon: Inbox, badge: newLeadCount }] : []),
+    // Website link also needs the public website switched on in Settings.
+    ...(has("showroom") && settings?.showroomEnabled ? [{ name: "Website", href: `${basePath}/showroom`, icon: Globe, external: true }] : []),
+    ...(has("reports") ? [{ name: "Reports", href: "/reports", icon: FileText }] : []),
+    ...(has("cash_sheet") ? [{ name: "Cash Sheet", href: "/cash-sheet", icon: Banknote }] : []),
+    ...(has("contacts") ? [{ name: "Saved Contacts", href: "/saved-contacts", icon: Users }] : []),
+    ...(has("csv_import") || has("cazoo_import") ? [{ name: "Import", href: "/import", icon: Download }] : []),
+    // Settings (including Users and Roles) is admin-only.
     ...(isAdmin ? [{ name: "Settings", href: "/settings", icon: SettingsIcon }] : []),
   ];
 

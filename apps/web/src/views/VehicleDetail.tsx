@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "@/lib/router";
 import { useAuth } from "@/lib/auth";
+import { useAccess } from "@/components/app/access";
 import { 
   useGetVehicle, 
   getGetVehicleQueryKey,
@@ -165,6 +166,8 @@ export default function VehicleDetail({ id }: { id: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { getToken } = useAuth();
+  const access = useAccess();
+  const canFinanceSale = !access.loaded || access.has("finance_sales");
   const basePath = "";
 
   // Invalidate every view that derives from a vehicle's data so changes (even
@@ -1131,6 +1134,7 @@ export default function VehicleDetail({ id }: { id: string }) {
                   Record Sale
                 </Button>
               </DialogTrigger>
+              {canFinanceSale && (
               <DialogTrigger asChild>
                 <Button className="bg-black hover:bg-zinc-800 text-white" onClick={() => {
                   setIsFinanceSale(true);
@@ -1142,6 +1146,7 @@ export default function VehicleDetail({ id }: { id: string }) {
                   Record Finance Sale
                 </Button>
               </DialogTrigger>
+              )}
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{isFinanceSale ? "Record Finance Sale" : "Record Sale"}</DialogTitle>

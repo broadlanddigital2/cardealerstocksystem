@@ -1,12 +1,13 @@
 import { Router } from "../http";
+import { requireModule } from "../lib/modules";
 import { eq, and, desc, isNotNull } from "@workspace/db";
 import { db, vehiclesTable, depositRefundsTable } from "@workspace/db";
-import { requireAdmin } from "../middlewares/requireAuth";
+import { requireAuth } from "../middlewares/requireAuth";
 import { serializeVehicle } from "../lib/vehicleSerializer";
 
 const router = new Router();
 
-router.use("/reports", requireAdmin);
+router.use("/reports", requireAuth, requireModule("reports"));
 
 router.get("/reports/stock", async (req, res): Promise<void> => {
   const userId = req.userId!;
