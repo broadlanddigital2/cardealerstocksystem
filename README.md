@@ -82,6 +82,7 @@ Leaving the build command blank keeps the OpenNext build and deploy in one step 
 | `RAPID_CAR_CHECK_API_KEY` | optional — registration lookup |
 | `FIRECRAWL_API_KEY` | optional — Cazoo import fallback |
 | `ALLOWED_EMAILS` / `ADMIN_EMAILS` | optional backstop allowlists (comma-separated) |
+| `PLATFORM_SECRET` | optional — 32+ character secret that lets Broadland Digital (later the console) set which modules this dealer has via `PUT /api/platform/modules` |
 
 Live URL (temporary): **https://cardealerstockbook.racecargraphics.uk** — set in `apps/web/wrangler.jsonc` → `routes`.
 
@@ -90,6 +91,8 @@ Database: Neon project in London (`aws-eu-west-2`), branches `production` (live)
 **SendGrid:** authenticate the `racecargraphics.uk` domain (testing; switch to the dealer domain for go-live) (Settings → Sender Authentication) by adding the CNAME records it gives you in Cloudflare DNS, then create an API key with *Mail Send* access. The app uses SendGrid's HTTPS API (works on Workers); SMTP via `SMTP_*` remains as a fallback.
 
 ## Notes
+
+- **Modules and roles:** optional parts of the app are modules (`src/lib/modules.ts`): reports, cash sheet, saved contacts, finance sales, showroom website, leads, Cazoo import, spreadsheet import, registration lookup. A dealer has a set of modules (`PUT /api/platform/modules`, Bearer `PLATFORM_SECRET`; default all). Admins can use all of them plus Settings/Users; the admin picks which ones Staff can use in **Settings → Roles** (default: all but Reports). Menus hide what a user can't use and the matching API endpoints return 403.
 
 - **VAT Margin Scheme:** margin = sale − purchase; VAT due = ⅙ of margin when margin > 0, else £0.
 - **Sign-in:** passwordless and handled by the site itself — `POST /api/auth/send-code` emails a 6-digit code through SendGrid (invited emails only; 10 minutes, 5 tries, single use, only a salted hash is stored), `POST /api/auth/verify-code` creates a 30-day session and sets an HttpOnly `stockbook_session` cookie (only its SHA-256 is stored, in `auth_sessions`). `/api/*` changes from other websites are refused (Origin check).

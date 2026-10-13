@@ -1,3 +1,4 @@
+import { useAccess } from "@/components/app/access";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -400,6 +401,7 @@ function CazooImportCard() {
 }
 
 export default function Import() {
+  const { has } = useAccess();
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -599,8 +601,9 @@ export default function Import() {
         <p className="text-slate-500">Bring vehicles into your stock book from Cazoo or a CSV file.</p>
       </div>
 
-      <CazooImportCard />
+      {has("cazoo_import") && <CazooImportCard />}
 
+      {has("csv_import") && (
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
@@ -671,6 +674,7 @@ export default function Import() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

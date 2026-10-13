@@ -1,11 +1,12 @@
 import { Router } from "../http";
+import { requireModule } from "../lib/modules";
 import { LookupVehicleBody, LookupVehicleResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { lookupRapidCarCheck, VehicleLookupError } from "../lib/rapidCarCheck";
 
 const router = new Router();
 
-router.post("/vehicle-lookup", requireAuth, async (req, res): Promise<void> => {
+router.post("/vehicle-lookup", requireAuth, requireModule("reg_lookup"), async (req, res): Promise<void> => {
   res.setHeader("Cache-Control", "no-store");
   const parsed = LookupVehicleBody.safeParse(req.body);
   if (!parsed.success) {
