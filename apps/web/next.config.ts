@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     "@workspace/api-client-react",
     "@workspace/object-storage-web",
     "@workspace/report-calc",
+    "@workspace/modules",
   ],
   // Type errors are caught by the dedicated `typecheck` CI step.
   typescript: { ignoreBuildErrors: false },
