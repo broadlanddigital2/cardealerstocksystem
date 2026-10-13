@@ -1,0 +1,59 @@
+name: Deploy dev site
+
+# The dev site (https://dev-cardealerstockbook.racecargraphics.uk) is deployed
+# from GitHub, not by Cloudflare Workers Builds. After CI passes on `develop`:
+#   1. apply any new database migrations to the Neon "dev" branch
+#   2. build and deploy Worker "cardealerstocksystem-dev" (wrangler env "dev")
+# Can also be run by hand: Actions -> "Deploy dev site" -> Run workflow.
+#
+# Repository secrets:
+#   NEON_DEV_DATABASE_URL   Neon "dev" branch connection string
+#   CLOUDFLARE_API_TOKEN    token with Workers edit rights (+ the zone for the custom domain)
+#   CLOUDFLARE_ACCOUNT_ID   Cloudflare account id
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Migrate and deploy dev
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'develop' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: development
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DEV_DATABASE_URL }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || 'develop' }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply database migrations (dev)
+        run: .github/scripts/step.sh "Dev migrations" pnpm --filter @workspace/db run migrate
+      - name: Build and deploy Worker (dev)
+        run: .github/scripts/step.sh "Dev deploy" pnpm run deploy:dev
+      - name: Summary
+        run: echo "::notice title=Dev site deployed::https://dev-cardealerstockbook.racecargraphics.uk ($(git rev-parse --short HEAD))"
