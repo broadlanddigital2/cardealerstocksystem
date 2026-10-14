@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requireAdmin, normaliseEmail, requestCode, signOut, verifyCode } from "@/lib/auth";
 import { createDealer, getDealer, readDealerForm, slugTaken, updateDealer } from "@/lib/dealers";
 import { pushModules, startSetup } from "@/lib/setup";
@@ -73,6 +74,12 @@ export async function startSetupAction(_prev: FormState, form: FormData): Promis
   redirect(`/dealers/${dealer.id}`);
 }
 
+/** Re-renders the dealer page with fresh data (a hash-only redirect wouldn't reload it). */
+function backToDomains(id: number): never {
+  revalidatePath(`/dealers/${id}`);
+  redirect(`/dealers/${id}?d=${Date.now()}#domains`);
+}
+
 async function dealerFromForm(form: FormData) {
   const id = Number(form.get("id"));
   return Number.isInteger(id) && id > 0 ? getDealer(id) : null;
@@ -87,7 +94,7 @@ export async function addDomainAction(_prev: FormState, form: FormData): Promise
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Couldn't add the address." };
   }
-  redirect(`/dealers/${dealer.id}#domains`);
+  backToDomains(dealer.id);
 }
 
 export async function checkDomainsAction(form: FormData): Promise<void> {
@@ -95,7 +102,7 @@ export async function checkDomainsAction(form: FormData): Promise<void> {
   const dealer = await dealerFromForm(form);
   if (!dealer) return;
   for (const d of await listDomains(dealer.id)) await checkDomain(d);
-  redirect(`/dealers/${dealer.id}#domains`);
+  backToDomains(dealer.id);
 }
 
 export async function removeDomainAction(form: FormData): Promise<void> {
@@ -103,5 +110,5 @@ export async function removeDomainAction(form: FormData): Promise<void> {
   const dealer = await dealerFromForm(form);
   if (!dealer) return;
   await removeDomain(dealer, Number(form.get("domainId")), actor);
-  redirect(`/dealers/${dealer.id}#domains`);
+  backToDomains(dealer.id);
 }
