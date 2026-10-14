@@ -11,15 +11,18 @@ jobs:
           PLESK_URL: ${{ secrets.PLESK_URL }}
           PLESK_API_KEY: ${{ secrets.PLESK_API_KEY }}
         run: |
-          set -u
-          [ -n "$PLESK_URL" ] || { echo "PLESK_URL secret missing"; exit 1; }
-          [ -n "$PLESK_API_KEY" ] || { echo "PLESK_API_KEY secret missing"; exit 1; }
+          note() { printf '::notice title=%s::%s\n' "$1" "$(echo "$2" | tr '\n' ' ' | cut -c1-900)"; }
+          [ -n "$PLESK_URL" ] || { note url "PLESK_URL secret missing"; exit 1; }
+          [ -n "$PLESK_API_KEY" ] || { note key "PLESK_API_KEY secret missing"; exit 1; }
           base="${PLESK_URL%/}"
-          echo "== server"
-          curl -sS --max-time 20 -w '\nHTTP %{http_code}\n' -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/server" | jq -c '{hostname, panel_version, platform}? // .' 2>/dev/null || curl -sS --max-time 20 -o /dev/null -w 'HTTP %{http_code}\n' -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/server"
-          echo "== service plans"
-          curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--list"]}' "$base/api/v2/cli/service_plan/call" | jq -r '.stdout // .'
-          echo "== mail server settings"
-          curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--info"]}' "$base/api/v2/cli/mailserver/call" | jq -r '.stdout // .' | grep -viE 'pass|key|secret' | head -40
-          echo "== domains (count)"
-          curl -sS --max-time 30 -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/domains" | jq 'length'
+          note url-shape "$(echo "$base" | sed -E 's#^(https?://)([^/:]+)(.*)#\1<host>\3#')"
+          code=$(curl -sS --max-time 20 -o /tmp/s.json -w '%{http_code}' -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/server" 2>/tmp/err) || true
+          note server "HTTP $code $(cat /tmp/err) $(jq -c '{hostname, panel_version, platform, panel_revision}' /tmp/s.json 2>/dev/null || head -c 300 /tmp/s.json)"
+          plans=$(curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--list"]}' "$base/api/v2/cli/service_plan/call" | jq -r '.stdout // .' 2>&1)
+          note plans "$plans"
+          ms=$(curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--info"]}' "$base/api/v2/cli/mailserver/call" | jq -r '.stdout // .' 2>&1 | grep -viE 'pass|key|secret' | head -30)
+          note mailserver "$ms"
+          n=$(curl -sS --max-time 30 -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/domains" | jq 'length' 2>&1)
+          note domains "$n"
+          lic=$(curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--info"]}' "$base/api/v2/cli/license/call" | jq -r '.stdout // .' 2>&1 | grep -iE 'name|domain|limit|edition|plesk' | grep -viE 'key' | head -15)
+          note licence "$lic"
