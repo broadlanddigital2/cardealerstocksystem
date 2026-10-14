@@ -5,3 +5,5 @@
 next-env.d.ts.bak
 cloudflare-env.d.ts
 .env*.local
+wrangler.dealer.json
+.dealer-secrets.json

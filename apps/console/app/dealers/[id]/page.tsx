@@ -4,12 +4,17 @@ import { dealerHistory, getDealer } from "@/lib/dealers";
 import { Shell, StatusBadge } from "@/components/Shell";
 import { DealerForm } from "@/components/DealerForm";
 import { updateDealerAction } from "../../actions";
+import { SetupButton } from "@/components/SetupButton";
+import { SETUP_STEPS, latestSteps, siteHost } from "@/lib/setup";
 
 export const dynamic = "force-dynamic";
 
 const ACTIONS: Record<string, string> = {
   "dealer.created": "Added",
   "dealer.updated": "Changed",
+  "dealer.setup_started": "Setup started",
+  "dealer.setup_finished": "Setup finished",
+  "dealer.setup_failed": "Setup failed",
 };
 
 export default async function DealerPage({
@@ -17,13 +22,16 @@ export default async function DealerPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; push?: string }>;
 }) {
   const admin = await requireAdmin();
   const id = Number((await params).id);
   const dealer = Number.isInteger(id) ? await getDealer(id) : null;
   if (!dealer) notFound();
-  const saved = (await searchParams).saved === "1";
+  const sp = await searchParams;
+  const saved = sp.saved === "1";
+  const steps = await latestSteps(dealer.id);
+  const host = siteHost(dealer);
   const history = await dealerHistory(dealer.id);
   const s = (v: string | null) => v ?? "";
 
@@ -36,13 +44,54 @@ export default async function DealerPage({
       </div>
       {saved && <p className="mb-6 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Saved.</p>}
 
+      {dealer.status === "provisioning" && <meta httpEquiv="refresh" content="5" />}
+      {sp.push && (
+        <p className="mb-6 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Saved, but the modules couldn&apos;t be sent to the dealer&apos;s site: {sp.push}
+        </p>
+      )}
       <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="font-semibold">Set up</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {dealer.status === "draft"
-            ? "Not set up yet. One-click setup of this dealer's database, files, site and email arrives in the next step of the console."
-            : "This dealer's site is set up."}
-        </p>
+        {dealer.status === "active" && dealer.siteUrl ? (
+          <p className="mt-1 text-sm text-slate-600">
+            Live at{" "}
+            <a href={dealer.siteUrl} className="font-medium text-blue-700 hover:underline" target="_blank" rel="noreferrer">
+              {dealer.siteUrl.replace(/^https:\/\//, "")}
+            </a>
+            {dealer.provisionedAt && <> · set up {dealer.provisionedAt.toLocaleDateString("en-GB")}</>}. Module changes saved below go to the site straight away.
+          </p>
+        ) : dealer.status === "provisioning" ? (
+          <p className="mt-1 text-sm text-slate-600">Setting up. This page updates every few seconds; it usually takes 5–10 minutes.</p>
+        ) : (
+          <p className="mt-1 text-sm text-slate-600">
+            Creates this dealer&apos;s own database, file bucket and site at <span className="font-mono">{host}</span>, saves their
+            details and modules, and emails {dealer.firstAdminEmail} an invitation.
+          </p>
+        )}
+
+        {steps.length > 0 && (
+          <ol className="mt-4 space-y-2 text-sm">
+            {steps.map((st) => {
+              const label = SETUP_STEPS.find((x) => x.key === st.step)?.label ?? st.step;
+              const icon = st.status === "done" ? "✓" : st.status === "failed" ? "✗" : st.status === "running" ? "…" : "○";
+              const colour =
+                st.status === "done" ? "text-green-700" : st.status === "failed" ? "text-red-700" : st.status === "running" ? "text-amber-700" : "text-slate-400";
+              return (
+                <li key={st.id} className="flex gap-3">
+                  <span className={`w-4 font-bold ${colour}`}>{icon}</span>
+                  <span>
+                    <span className={st.status === "pending" ? "text-slate-400" : ""}>{label}</span>
+                    {st.message && <span className={`block text-xs ${st.status === "failed" ? "text-red-700" : "text-slate-500"}`}>{st.message}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+
+        {(dealer.status === "draft" || dealer.status === "failed") && (
+          <SetupButton dealerId={dealer.id} label={dealer.status === "failed" ? "Try setup again" : "Set up this dealer"} />
+        )}
       </section>
 
       <DealerForm

@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { requireAdmin, normaliseEmail, requestCode, signOut, verifyCode } from "@/lib/auth";
-import { createDealer, readDealerForm, slugTaken, updateDealer } from "@/lib/dealers";
+import { createDealer, getDealer, readDealerForm, slugTaken, updateDealer } from "@/lib/dealers";
+import { pushModules, startSetup } from "@/lib/setup";
 
 export interface FormState {
   error: string | null;
@@ -49,6 +50,24 @@ export async function updateDealerAction(_prev: FormState, form: FormData): Prom
   const parsed = readDealerForm(form);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
   if (await slugTaken(parsed.data.slug, id)) return { error: `The short id "${parsed.data.slug}" is already used.` };
-  await updateDealer(id, parsed.data, actor);
-  redirect(`/dealers/${id}?saved=1`);
+  const updated = await updateDealer(id, parsed.data, actor);
+  // A live dealer's site gets module changes straight away.
+  const pushError = await pushModules(updated);
+  redirect(`/dealers/${id}?saved=1${pushError ? `&push=${encodeURIComponent(pushError)}` : ""}`);
+}
+
+export async function startSetupAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const actor = await requireAdmin();
+  const id = Number(form.get("id"));
+  const dealer = Number.isInteger(id) && id > 0 ? await getDealer(id) : null;
+  if (!dealer) return { error: "Unknown dealer." };
+  if (dealer.status !== "draft" && dealer.status !== "failed") {
+    return { error: "This dealer is already set up or being set up." };
+  }
+  try {
+    await startSetup(dealer, actor);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't start the setup." };
+  }
+  redirect(`/dealers/${dealer.id}`);
 }

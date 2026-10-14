@@ -1,0 +1,57 @@
+name: Set up dealer
+
+# Started by the console's "Set up this dealer" button (or by hand). Creates the
+# dealer's Neon database, R2 bucket and Worker, sets secrets and settings,
+# checks the site and emails the first admin. Progress is written to the
+# console database, so the console shows each step.
+#
+# Repository secrets: NEON_API_KEY, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
+#   SENDGRID_API_KEY, CONSOLE_DATABASE_URL, CONSOLE_DEV_DATABASE_URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      dealer_id:
+        description: "Dealer id (from the console)"
+        required: true
+      run_id:
+        description: "Setup run id (from the console)"
+        required: true
+      console:
+        description: "Which console started it"
+        type: choice
+        options: [live, dev]
+        default: live
+
+concurrency:
+  group: provision-dealer-${{ inputs.console }}-${{ inputs.dealer_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Set up dealer ${{ inputs.dealer_id }} (${{ inputs.console }} console)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEALER_ID: ${{ inputs.dealer_id }}
+      RUN_ID: ${{ inputs.run_id }}
+      CONSOLE_DATABASE_URL: ${{ inputs.console == 'dev' && secrets.CONSOLE_DEV_DATABASE_URL || secrets.CONSOLE_DATABASE_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+      EMAIL_FROM: noreply@racecargraphics.uk
+      PLATFORM_DOMAIN: racecargraphics.uk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set up the dealer
+        run: .github/scripts/step.sh "Dealer setup" node apps/console/scripts/provision.mjs

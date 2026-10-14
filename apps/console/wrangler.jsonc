@@ -12,13 +12,18 @@
     { "pattern": "console-stockbook.racecargraphics.uk", "custom_domain": true }
   ],
   // Secrets (set by the "Deploy console" workflow from GitHub secrets):
-  //   DATABASE_URL (console database), SENDGRID_API_KEY
+  //   DATABASE_URL (console database), SENDGRID_API_KEY, CONSOLE_GITHUB_TOKEN
   "vars": {
     "APP_URL": "https://console-stockbook.racecargraphics.uk",
     // Who may sign in (comma-separated).
     "CONSOLE_ADMIN_EMAILS": "justin@broadlanddigital.co.uk",
     "EMAIL_FROM": "noreply@racecargraphics.uk",
-    "EMAIL_FROM_NAME": "Stock Book Console"
+    "EMAIL_FROM_NAME": "Stock Book Console",
+    // Setup button: starts .github/workflows/provision-dealer.yml on this branch.
+    "CONSOLE_TARGET": "live",
+    "PROVISION_REF": "main",
+    "GITHUB_REPO": "broadlanddigital2/cardealerstocksystem",
+    "PLATFORM_DOMAIN": "racecargraphics.uk"
   },
   "env": {
     "dev": {
@@ -29,7 +34,11 @@
         "APP_URL": "https://dev-console-stockbook.racecargraphics.uk",
         "CONSOLE_ADMIN_EMAILS": "justin@broadlanddigital.co.uk",
         "EMAIL_FROM": "noreply@racecargraphics.uk",
-        "EMAIL_FROM_NAME": "Stock Book Console (dev)"
+        "EMAIL_FROM_NAME": "Stock Book Console (dev)",
+        "CONSOLE_TARGET": "dev",
+        "PROVISION_REF": "develop",
+        "GITHUB_REPO": "broadlanddigital2/cardealerstocksystem",
+        "PLATFORM_DOMAIN": "racecargraphics.uk"
       }
     }
   }

@@ -26,6 +26,13 @@ export const dealersTable = pgTable("dealers", {
   /** draft | provisioning | active | failed | suspended */
   status: text("status").notNull().default("draft"),
   notes: text("notes"),
+  /** Set by the setup job. */
+  neonProjectId: text("neon_project_id"),
+  workerName: text("worker_name"),
+  siteUrl: text("site_url"),
+  /** Lets the console change this dealer's modules (Bearer token for /api/platform/modules). */
+  platformSecret: text("platform_secret"),
+  provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -72,3 +79,22 @@ export const consoleSessionsTable = pgTable("console_sessions", {
 }).enableRLS();
 
 export type Dealer = typeof dealersTable.$inferSelect;
+
+/** Progress of the latest setup run for each dealer (one row per step). */
+export const setupStepsTable = pgTable(
+  "setup_steps",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    runId: text("run_id").notNull(),
+    position: integer("position").notNull(),
+    step: text("step").notNull(),
+    /** pending | running | done | failed */
+    status: text("status").notNull().default("pending"),
+    message: text("message"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("setup_steps_dealer_idx").on(t.dealerId, t.runId)],
+).enableRLS();
+
+export type SetupStep = typeof setupStepsTable.$inferSelect;
