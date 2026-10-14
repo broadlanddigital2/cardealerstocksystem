@@ -162,6 +162,10 @@ try {
     run("pnpm", ["--filter", "@workspace/web", "exec", "opennextjs-cloudflare", "build"], {
       env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
     });
+    const platformDomain = env("PLATFORM_DOMAIN", false) || "racecargraphics.uk";
+    const ownDomains = (
+      await consoleDb.query("select hostname from dealer_domains where dealer_id = $1 order by id", [dealerId])
+    ).rows.map((r) => r.hostname);
     const baseConfig = readFileSync(path.join(webDir, "wrangler.jsonc"), "utf8");
     const compatibilityDate = /"compatibility_date"\s*:\s*"([^"]+)"/.exec(baseConfig)?.[1] ?? "2026-09-27";
     const config = {
@@ -171,7 +175,11 @@ try {
       compatibility_flags: ["nodejs_compat"],
       assets: { directory: ".open-next/assets", binding: "ASSETS" },
       observability: { enabled: true },
-      routes: [{ pattern: host, custom_domain: true }],
+      routes: [
+        { pattern: host, custom_domain: true },
+        // The dealer's own addresses (added in the console) must survive a redeploy.
+        ...ownDomains.map((h) => ({ pattern: `${h}/*`, zone_name: platformDomain })),
+      ],
       r2_buckets: [{ binding: "FILES", bucket_name: bucketName, jurisdiction: "eu" }],
       triggers: { crons: CRONS },
       vars: {

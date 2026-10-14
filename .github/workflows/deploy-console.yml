@@ -10,6 +10,7 @@ name: Deploy console
 #   CONSOLE_DEV_DATABASE_URL / CONSOLE_DATABASE_URL   Neon project "stockbook-console" (dev / production branch)
 #   SENDGRID_API_KEY                                  for sign-in codes
 #   CONSOLE_GITHUB_TOKEN                              lets the Set up button start provision-dealer.yml
+#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID      also given to the console for dealers' own addresses
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 
 on:
@@ -92,7 +93,7 @@ jobs:
         env:
           DATABASE_URL: ${{ steps.t.outputs.db }}
         run: |
-          node -e 'require("fs").writeFileSync("/tmp/secrets.json", JSON.stringify({DATABASE_URL: process.env.DATABASE_URL, SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || "", CONSOLE_GITHUB_TOKEN: process.env.CONSOLE_GITHUB_TOKEN || ""}))'
+          node -e 'require("fs").writeFileSync("/tmp/secrets.json", JSON.stringify({DATABASE_URL: process.env.DATABASE_URL, SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || "", CONSOLE_GITHUB_TOKEN: process.env.CONSOLE_GITHUB_TOKEN || "", CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN || "", CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || ""}))'
           ../../.github/scripts/step.sh "Console secrets" pnpm exec wrangler secret bulk /tmp/secrets.json ${{ steps.t.outputs.envflag }}
           rm -f /tmp/secrets.json
           echo "::notice title=Console deployed::${{ steps.t.outputs.url }}"
