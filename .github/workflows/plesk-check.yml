@@ -1,0 +1,25 @@
+name: Plesk check
+on:
+  push:
+    branches: [plesk-check]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reach the Plesk API
+        env:
+          PLESK_URL: ${{ secrets.PLESK_URL }}
+          PLESK_API_KEY: ${{ secrets.PLESK_API_KEY }}
+        run: |
+          set -u
+          [ -n "$PLESK_URL" ] || { echo "PLESK_URL secret missing"; exit 1; }
+          [ -n "$PLESK_API_KEY" ] || { echo "PLESK_API_KEY secret missing"; exit 1; }
+          base="${PLESK_URL%/}"
+          echo "== server"
+          curl -sS --max-time 20 -w '\nHTTP %{http_code}\n' -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/server" | jq -c '{hostname, panel_version, platform}? // .' 2>/dev/null || curl -sS --max-time 20 -o /dev/null -w 'HTTP %{http_code}\n' -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/server"
+          echo "== service plans"
+          curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--list"]}' "$base/api/v2/cli/service_plan/call" | jq -r '.stdout // .'
+          echo "== mail server settings"
+          curl -sS --max-time 30 -X POST -H "X-API-Key: $PLESK_API_KEY" -H 'Content-Type: application/json' -d '{"params":["--info"]}' "$base/api/v2/cli/mailserver/call" | jq -r '.stdout // .' | grep -viE 'pass|key|secret' | head -40
+          echo "== domains (count)"
+          curl -sS --max-time 30 -H "X-API-Key: $PLESK_API_KEY" "$base/api/v2/domains" | jq 'length'
