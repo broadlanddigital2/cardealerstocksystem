@@ -6,6 +6,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      - name: Secret names this workflow can see (names only)
+        env:
+          ALL: ${{ toJSON(secrets) }}
+        run: printf '::notice title=secret-names::%s\n' "$(echo "$ALL" | jq -r 'keys | join(", ")')"
       - name: Reach the Plesk API
         env:
           PLESK_URL: ${{ secrets.PLESK_URL }}
