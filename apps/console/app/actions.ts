@@ -112,3 +112,12 @@ export async function removeDomainAction(form: FormData): Promise<void> {
   await removeDomain(dealer, Number(form.get("domainId")), actor);
   backToDomains(dealer.id);
 }
+
+export async function checkDomainAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return;
+  const domain = (await listDomains(dealer.id)).find((d) => d.id === Number(form.get("domainId")));
+  if (domain) await checkDomain(domain);
+  backToDomains(dealer.id);
+}

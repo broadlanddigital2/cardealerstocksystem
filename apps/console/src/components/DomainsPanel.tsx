@@ -1,6 +1,7 @@
 import type { DealerDomain } from "@/db/client";
 import { cnameTarget } from "@/lib/domains";
-import { checkDomainsAction, removeDomainAction } from "../../app/actions";
+import { checkDomainAction, checkDomainsAction, removeDomainAction } from "../../app/actions";
+import { CheckButton } from "./CheckButton";
 import { AddDomainForm } from "./AddDomainForm";
 import { CopyButton } from "./CopyButton";
 
@@ -14,7 +15,7 @@ export function DomainsPanel({ dealerId, domains }: { dealerId: number; domains:
         {domains.length > 0 && (
           <form action={checkDomainsAction}>
             <input type="hidden" name="id" value={dealerId} />
-            <button className="text-sm text-slate-600 hover:text-slate-900 hover:underline">Check now</button>
+            <CheckButton>Check all</CheckButton>
           </form>
         )}
       </div>
@@ -39,7 +40,14 @@ export function DomainsPanel({ dealerId, domains }: { dealerId: number; domains:
                 >
                   {d.status === "active" ? "Live" : d.status === "error" ? "Problem" : "Waiting for DNS"}
                 </span>
-                <form action={removeDomainAction} className="ml-auto">
+                {d.status !== "active" && (
+                  <form action={checkDomainAction} className="ml-auto">
+                    <input type="hidden" name="id" value={dealerId} />
+                    <input type="hidden" name="domainId" value={d.id} />
+                    <CheckButton />
+                  </form>
+                )}
+                <form action={removeDomainAction} className={d.status === "active" ? "ml-auto" : ""}>
                   <input type="hidden" name="id" value={dealerId} />
                   <input type="hidden" name="domainId" value={d.id} />
                   <button className="text-xs text-red-700 hover:underline">Remove</button>
