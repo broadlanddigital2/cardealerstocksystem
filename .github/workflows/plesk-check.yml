@@ -6,27 +6,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Which Plesk-like secrets are set (names only)
-        env:
-          A: ${{ secrets.PLESK_API_KEY }}
-          B: ${{ secrets.PLESK_KEY }}
-          C: ${{ secrets.PLESK_APIKEY }}
-          D: ${{ secrets.PLESK_API_TOKEN }}
-          E: ${{ secrets.PLESK_TOKEN }}
-          F: ${{ secrets.PLESK_SECRET }}
-          G: ${{ secrets.PLESK_API }}
-          H: ${{ secrets.PLESK_URL }}
-        run: |
-          out=""
-          for pair in A:PLESK_API_KEY B:PLESK_KEY C:PLESK_APIKEY D:PLESK_API_TOKEN E:PLESK_TOKEN F:PLESK_SECRET G:PLESK_API H:PLESK_URL; do
-            v="${pair%%:*}"; n="${pair#*:}"; val="${!v}"
-            out="$out $n=$([ -n "$val" ] && echo "set(${#val} chars)" || echo empty)"
-          done
-          printf '::notice title=secrets::%s\n' "$out"
       - name: Reach the Plesk API
         env:
           PLESK_URL: ${{ secrets.PLESK_URL }}
-          PLESK_API_KEY: ${{ secrets.PLESK_API_KEY }}
+          PLESK_API_KEY: ${{ secrets.PLESK_KEY }}
         run: |
           note() { printf '::notice title=%s::%s\n' "$1" "$(echo "$2" | tr '\n' ' ' | cut -c1-900)"; }
           [ -n "$PLESK_URL" ] || { note url "PLESK_URL secret missing"; exit 1; }
