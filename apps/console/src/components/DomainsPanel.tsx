@@ -2,6 +2,7 @@ import type { DealerDomain } from "@/db/client";
 import { cnameTarget } from "@/lib/domains";
 import { checkDomainsAction, removeDomainAction } from "../../app/actions";
 import { AddDomainForm } from "./AddDomainForm";
+import { CopyButton } from "./CopyButton";
 
 const KIND: Record<string, string> = { staff: "Staff", showroom: "Showroom" };
 
@@ -58,9 +59,15 @@ export function DomainsPanel({ dealerId, domains }: { dealerId: number; domains:
                     <tbody className="font-mono">
                       {(d.records.length ? d.records : [{ type: "CNAME", name: d.hostname, value: cnameTarget() }]).map((r, i) => (
                         <tr key={i} className="border-t border-slate-100">
-                          <td className="py-1 pr-3">{r.type}</td>
-                          <td className="break-all py-1 pr-3">{r.name}</td>
-                          <td className="break-all py-1">{r.value}</td>
+                          <td className="py-1 pr-3">
+                            <span className="flex items-center">{r.type}<CopyButton value={r.type} label="type" /></span>
+                          </td>
+                          <td className="py-1 pr-3">
+                            <span className="flex items-center justify-between"><span className="break-all">{r.name}</span><CopyButton value={r.name} label="name" /></span>
+                          </td>
+                          <td className="py-1">
+                            <span className="flex items-center justify-between"><span className="break-all">{r.value}</span><CopyButton value={r.value} label="value" /></span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
