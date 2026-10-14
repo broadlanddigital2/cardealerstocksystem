@@ -5,6 +5,8 @@ import { Shell, StatusBadge } from "@/components/Shell";
 import { DealerForm } from "@/components/DealerForm";
 import { updateDealerAction } from "../../actions";
 import { SetupButton } from "@/components/SetupButton";
+import { DomainsPanel } from "@/components/DomainsPanel";
+import { checkDomain, listDomains } from "@/lib/domains";
 import { SETUP_STEPS, latestSteps, siteHost } from "@/lib/setup";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,8 @@ const ACTIONS: Record<string, string> = {
   "dealer.setup_started": "Setup started",
   "dealer.setup_finished": "Setup finished",
   "dealer.setup_failed": "Setup failed",
+  "domain.added": "Address added",
+  "domain.removed": "Address removed",
 };
 
 export default async function DealerPage({
@@ -31,6 +35,13 @@ export default async function DealerPage({
   const sp = await searchParams;
   const saved = sp.saved === "1";
   const steps = await latestSteps(dealer.id);
+  let domains = dealer.status === "active" ? await listDomains(dealer.id) : [];
+  // Waiting addresses are re-checked with Cloudflare when the page opens (at most once a minute).
+  domains = await Promise.all(
+    domains.map((d) =>
+      d.status !== "active" && (!d.checkedAt || Date.now() - d.checkedAt.getTime() > 60_000) ? checkDomain(d) : d,
+    ),
+  );
   const host = siteHost(dealer);
   const history = await dealerHistory(dealer.id);
   const s = (v: string | null) => v ?? "";
@@ -93,6 +104,8 @@ export default async function DealerPage({
           <SetupButton dealerId={dealer.id} label={dealer.status === "failed" ? "Try setup again" : "Set up this dealer"} />
         )}
       </section>
+
+      {dealer.status === "active" && <DomainsPanel dealerId={dealer.id} domains={domains} />}
 
       <DealerForm
         action={updateDealerAction}

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, normaliseEmail, requestCode, signOut, verifyCode } from "@/lib/auth";
 import { createDealer, getDealer, readDealerForm, slugTaken, updateDealer } from "@/lib/dealers";
 import { pushModules, startSetup } from "@/lib/setup";
+import { addDomain, checkDomain, listDomains, removeDomain } from "@/lib/domains";
 
 export interface FormState {
   error: string | null;
@@ -70,4 +71,37 @@ export async function startSetupAction(_prev: FormState, form: FormData): Promis
     return { error: err instanceof Error ? err.message : "Couldn't start the setup." };
   }
   redirect(`/dealers/${dealer.id}`);
+}
+
+async function dealerFromForm(form: FormData) {
+  const id = Number(form.get("id"));
+  return Number.isInteger(id) && id > 0 ? getDealer(id) : null;
+}
+
+export async function addDomainAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    await addDomain(dealer, form.get("hostname"), form.get("kind"), actor);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't add the address." };
+  }
+  redirect(`/dealers/${dealer.id}#domains`);
+}
+
+export async function checkDomainsAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return;
+  for (const d of await listDomains(dealer.id)) await checkDomain(d);
+  redirect(`/dealers/${dealer.id}#domains`);
+}
+
+export async function removeDomainAction(form: FormData): Promise<void> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return;
+  await removeDomain(dealer, Number(form.get("domainId")), actor);
+  redirect(`/dealers/${dealer.id}#domains`);
 }

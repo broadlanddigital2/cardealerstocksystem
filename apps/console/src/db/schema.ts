@@ -98,3 +98,28 @@ export const setupStepsTable = pgTable(
 ).enableRLS();
 
 export type SetupStep = typeof setupStepsTable.$inferSelect;
+
+/** A dealer's own web address (staff app or public showroom), served via Cloudflare for SaaS. */
+export const dealerDomainsTable = pgTable(
+  "dealer_domains",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    hostname: text("hostname").notNull().unique(),
+    /** staff | showroom */
+    kind: text("kind").notNull(),
+    cfHostnameId: text("cf_hostname_id"),
+    cfRouteId: text("cf_route_id"),
+    /** pending | active | error (Cloudflare's custom-hostname status, simplified) */
+    status: text("status").notNull().default("pending"),
+    sslStatus: text("ssl_status"),
+    /** DNS records the dealer must add: [{ type, name, value }] */
+    records: jsonb("records").$type<{ type: string; name: string; value: string }[]>().notNull().default([]),
+    message: text("message"),
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dealer_domains_dealer_idx").on(t.dealerId)],
+).enableRLS();
+
+export type DealerDomain = typeof dealerDomainsTable.$inferSelect;
