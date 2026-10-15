@@ -83,17 +83,23 @@ jobs:
         if: steps.t.outputs.ready == 'true'
         with:
           ref: ${{ steps.t.outputs.ref }}
+      - name: Release support in this version?
+        id: has
+        if: steps.t.outputs.ready == 'true'
+        run: |
+          if [ -f apps/console/scripts/rollout.mjs ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice title=Release skipped::This version doesn't include the release script yet."; fi
       - uses: pnpm/action-setup@v4
-        if: steps.t.outputs.ready == 'true'
+        if: steps.has.outputs.ok == 'true'
       - uses: actions/setup-node@v4
-        if: steps.t.outputs.ready == 'true'
+        if: steps.has.outputs.ok == 'true'
         with:
           node-version: 22
           cache: pnpm
-      - if: steps.t.outputs.ready == 'true'
+      - if: steps.has.outputs.ok == 'true'
         run: pnpm install --frozen-lockfile
       - name: Release
-        if: steps.t.outputs.ready == 'true'
+        if: steps.has.outputs.ok == 'true'
         run: |
           export RELEASE="$(git rev-parse HEAD)"
           export RELEASE_TITLE="$(git log -1 --format=%s)"
