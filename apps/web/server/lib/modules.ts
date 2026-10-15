@@ -1,7 +1,11 @@
 // Which modules this site has, and which modules each role may use.
 //
-//  - Site modules: system_state "site_modules" -> { enabled: ModuleKey[] }.
-//    Set by Broadland Digital (later the console). Default: every module.
+//  - Site modules: system_state "site_modules" -> { on, off }: this dealer's
+//    exceptions to the catalogue defaults, set from the central console.
+//    Included modules are on unless in "off"; premium ones only when in "on".
+//    So a new included module appears with the next release, and a new
+//    premium module arrives switched off. (Older { enabled: [...] } values are
+//    read as the exceptions they imply.)
 //  - Roles: the `roles` table. "admin" is built in (every site module, plus
 //    Settings and Users). The role with key "user" is the default Staff role;
 //    it is created on first use and can be renamed but not deleted.
@@ -10,9 +14,11 @@ import { db, eq, appUsersTable, rolesTable, systemStateTable } from "@workspace/
 import type { NextFunction, Request, Response } from "../http";
 import {
   DEFAULT_STAFF_MODULES,
-  MODULE_KEYS,
   cleanModuleList,
+  readModuleSetting,
+  resolveModules,
   type ModuleKey,
+  type ModuleOverrides,
 } from "../../src/lib/modules";
 import { getEmailRole, getSessionUserId, getUserEmail } from "../middlewares/requireAuth";
 
@@ -63,10 +69,7 @@ async function load(): Promise<{ site: ModuleKey[]; roles: RoleInfo[] }> {
     readState(SITE_KEY),
     db.select().from(rolesTable).orderBy(rolesTable.id),
   ]);
-  const site =
-    siteRaw && typeof siteRaw === "object" && "enabled" in siteRaw
-      ? cleanModuleList((siteRaw as { enabled: unknown }).enabled)
-      : [...MODULE_KEYS];
+  const site = resolveModules(readModuleSetting(siteRaw));
   const roles: RoleInfo[] = rows.map((r) => ({
     key: r.key,
     name: r.name,
@@ -104,17 +107,23 @@ export async function modulesForRole(roleKey: string): Promise<ModuleKey[]> {
   return role?.modules ?? [];
 }
 
-export async function setSiteModules(enabled: unknown): Promise<ModuleKey[]> {
-  const list = cleanModuleList(enabled);
+/** This dealer's module exceptions as stored. */
+export async function getSiteModuleSetting(): Promise<ModuleOverrides> {
+  return readModuleSetting(await readState(SITE_KEY));
+}
+
+/** Saves the dealer's module exceptions. Accepts { on, off } or a full { enabled } list. */
+export async function setSiteModules(body: unknown): Promise<ModuleKey[]> {
+  const value = readModuleSetting(body);
   await db
     .insert(systemStateTable)
-    .values({ key: SITE_KEY, value: { enabled: list } })
+    .values({ key: SITE_KEY, value })
     .onConflictDoUpdate({
       target: systemStateTable.key,
-      set: { value: { enabled: list }, updatedAt: new Date() },
+      set: { value, updatedAt: new Date() },
     });
   bustModuleCache();
-  return list;
+  return resolveModules(value);
 }
 
 export class RoleError extends Error {}

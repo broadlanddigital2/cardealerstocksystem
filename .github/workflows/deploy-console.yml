@@ -3,8 +3,9 @@ name: Deploy console
 # The central console (Broadland Digital staff only). After CI passes:
 #   develop -> https://dev-console-stockbook.racecargraphics.uk (Worker stockbook-console-dev)
 #   main    -> https://console-stockbook.racecargraphics.uk     (Worker stockbook-console)
-# Steps: apply the console's database migrations, deploy the Worker, then set
-# its secrets from the GitHub secrets below.
+# Steps: apply the console's database migrations, deploy the Worker, set its
+# secrets from the GitHub secrets below, then release the same commit to every
+# dealer of that console (rollout.yml).
 #
 # Repository secrets:
 #   CONSOLE_DEV_DATABASE_URL / CONSOLE_DATABASE_URL   Neon project "stockbook-console" (dev / production branch)
@@ -41,6 +42,9 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      ready: ${{ steps.t.outputs.ready }}
+      target: ${{ steps.t.outputs.target }}
     env:
       IS_DEV: ${{ (github.event.workflow_run.head_branch || (inputs.target == 'live' && 'main' || 'develop')) == 'develop' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -55,10 +59,12 @@ jobs:
         id: t
         run: |
           if [ "$IS_DEV" = "true" ]; then
+            echo "target=dev" >> "$GITHUB_OUTPUT"
             echo "db=$DEV_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy:dev" >> "$GITHUB_OUTPUT"; echo "envflag=--env dev" >> "$GITHUB_OUTPUT"
             echo "ref=develop" >> "$GITHUB_OUTPUT"; echo "url=https://dev-console-stockbook.racecargraphics.uk" >> "$GITHUB_OUTPUT"
             [ -n "$DEV_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
           else
+            echo "target=live" >> "$GITHUB_OUTPUT"
             echo "db=$LIVE_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy" >> "$GITHUB_OUTPUT"; echo "envflag=" >> "$GITHUB_OUTPUT"
             echo "ref=main" >> "$GITHUB_OUTPUT"; echo "url=https://console-stockbook.racecargraphics.uk" >> "$GITHUB_OUTPUT"
             [ -n "$LIVE_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -97,3 +103,14 @@ jobs:
           ../../.github/scripts/step.sh "Console secrets" pnpm exec wrangler secret bulk /tmp/secrets.json ${{ steps.t.outputs.envflag }}
           rm -f /tmp/secrets.json
           echo "::notice title=Console deployed::${{ steps.t.outputs.url }}"
+
+  # Then update every dealer of this console to the same release (pilot dealers first).
+  release:
+    name: Release to dealers
+    needs: deploy
+    if: github.event_name == 'workflow_run' && needs.deploy.outputs.ready == 'true'
+    uses: ./.github/workflows/rollout.yml
+    with:
+      target: ${{ needs.deploy.outputs.target }}
+      sha: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit

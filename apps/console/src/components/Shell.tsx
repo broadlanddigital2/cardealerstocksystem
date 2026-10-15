@@ -6,7 +6,11 @@ export function Shell({ admin, children }: { admin: string; children: ReactNode 
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <a href="/" className="font-bold">Stock Book Console</a>
+          <nav className="flex items-center gap-5">
+            <a href="/" className="font-bold">Stock Book Console</a>
+            <a href="/" className="text-sm text-slate-600 hover:text-slate-900">Dealers</a>
+            <a href="/releases" className="text-sm text-slate-600 hover:text-slate-900">Releases</a>
+          </nav>
           <div className="flex items-center gap-4 text-sm text-slate-500">
             <span>{admin}</span>
             <form action={signOutAction}>

@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
-import { listDealers } from "@/lib/dealers";
+import { dealerModules, listDealers } from "@/lib/dealers";
 import { Shell, StatusBadge } from "@/components/Shell";
+import { shortRelease } from "@/lib/releases";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function DealersPage() {
                 <th className="px-4 py-3 font-medium">Short id</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Modules</th>
+                <th className="px-4 py-3 font-medium">Version</th>
               </tr>
             </thead>
             <tbody>
@@ -39,7 +41,11 @@ export default async function DealersPage() {
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">{d.slug}</td>
                   <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-3 text-slate-500">{d.modules.length}</td>
+                  <td className="px-4 py-3 text-slate-500">{dealerModules(d).length}</td>
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs">{d.status === "active" ? shortRelease(d.release) : "—"}</span>
+                    {d.pilot && <span className="ml-2 rounded-full bg-sky-100 px-2 text-[11px] text-sky-800">pilot</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>

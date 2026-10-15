@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { dealerHistory, getDealer } from "@/lib/dealers";
+import { dealerHistory, dealerModules, getDealer } from "@/lib/dealers";
 import { Shell, StatusBadge } from "@/components/Shell";
 import { DealerForm } from "@/components/DealerForm";
 import { updateDealerAction } from "../../actions";
 import { SetupButton } from "@/components/SetupButton";
+import { ReleaseButton } from "@/components/ReleaseButton";
+import { shortRelease } from "@/lib/releases";
 import { DomainsPanel } from "@/components/DomainsPanel";
 import { checkDomain, listDomains } from "@/lib/domains";
 import { SETUP_STEPS, latestSteps, siteHost } from "@/lib/setup";
@@ -18,6 +20,7 @@ const ACTIONS: Record<string, string> = {
   "dealer.setup_finished": "Setup finished",
   "dealer.setup_failed": "Setup failed",
   "domain.added": "Address added",
+  "dealer.update_started": "Update started",
   "domain.removed": "Address removed",
 };
 
@@ -105,6 +108,24 @@ export default async function DealerPage({
         )}
       </section>
 
+      {dealer.status === "active" && (
+        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="font-semibold">Version</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Running release <span className="font-mono">{shortRelease(dealer.release)}</span>
+            {dealer.releasedAt && <> since {dealer.releasedAt.toLocaleString("en-GB", { timeZone: "Europe/London" })}</>}.
+            {dealer.pilot ? " Pilot dealer: gets each release first." : " Updated automatically with every release."}
+          </p>
+          <div className="mt-3">
+            <ReleaseButton
+              dealerId={dealer.id}
+              label="Update this dealer now"
+              confirmText={`Redeploy the latest version to ${dealer.name} now?`}
+            />
+          </div>
+        </section>
+      )}
+
       {dealer.status === "active" && <DomainsPanel dealerId={dealer.id} domains={domains} />}
 
       <DealerForm
@@ -124,7 +145,8 @@ export default async function DealerPage({
           staffDomain: s(dealer.staffDomain),
           showroomDomain: s(dealer.showroomDomain),
           firstAdminEmail: dealer.firstAdminEmail,
-          modules: dealer.modules,
+          modules: dealerModules(dealer),
+          pilot: dealer.pilot,
           notes: s(dealer.notes),
         }}
       />

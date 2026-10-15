@@ -3,6 +3,7 @@
 // deploys the dealer's site and reports each step back to this database.
 import { and, asc, desc, eq } from "drizzle-orm";
 import { auditLogTable, dealersTable, getDb, setupStepsTable, type Dealer } from "@/db/client";
+import { dealerOverrides } from "@/lib/dealers";
 
 export const SETUP_STEPS = [
   { key: "database", label: "Create the dealer's database (Neon, London)" },
@@ -95,7 +96,7 @@ export async function pushModules(dealer: Dealer): Promise<string | null> {
     const resp = await fetch(`${dealer.siteUrl}/api/platform/modules`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${dealer.platformSecret}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: dealer.modules }),
+      body: JSON.stringify(dealerOverrides(dealer)),
       signal: AbortSignal.timeout(15_000),
     });
     return resp.ok ? null : `The dealer's site answered ${resp.status}.`;

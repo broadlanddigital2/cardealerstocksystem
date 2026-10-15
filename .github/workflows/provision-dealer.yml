@@ -45,6 +45,7 @@ jobs:
       SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
       EMAIL_FROM: noreply@racecargraphics.uk
       PLATFORM_DOMAIN: racecargraphics.uk
+      RELEASE: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
