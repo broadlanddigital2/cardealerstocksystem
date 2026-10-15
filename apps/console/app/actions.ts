@@ -6,6 +6,7 @@ import { requireAdmin, normaliseEmail, requestCode, signOut, verifyCode } from "
 import { createDealer, getDealer, readDealerForm, slugTaken, updateDealer } from "@/lib/dealers";
 import { pushModules, startSetup } from "@/lib/setup";
 import { addDomain, checkDomain, listDomains, removeDomain } from "@/lib/domains";
+import { startRelease } from "@/lib/releases";
 
 export interface FormState {
   error: string | null;
@@ -120,4 +121,18 @@ export async function checkDomainAction(form: FormData): Promise<void> {
   const domain = (await listDomains(dealer.id)).find((d) => d.id === Number(form.get("domainId")));
   if (domain) await checkDomain(domain);
   backToDomains(dealer.id);
+}
+
+export async function startReleaseAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const actor = await requireAdmin();
+  const id = Number(form.get("id"));
+  const dealer = Number.isInteger(id) && id > 0 ? await getDealer(id) : null;
+  if (form.get("id") && !dealer) return { error: "Unknown dealer." };
+  try {
+    await startRelease(actor, dealer ?? undefined);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't start the release." };
+  }
+  revalidatePath("/releases");
+  redirect("/releases");
 }

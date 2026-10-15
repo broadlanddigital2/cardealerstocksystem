@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SLUG_RE, dealerInput } from "./dealers";
+import { SLUG_RE, dealerInput, dealerModules } from "./dealers";
 
 const base = { name: "Manor Garage", slug: "manor-garage", firstAdminEmail: "Owner@Example.co.uk", modules: ["reports", "nope"] };
 
@@ -17,5 +17,16 @@ describe("dealer form", () => {
     expect(SLUG_RE.test("ab")).toBe(false);
     expect(SLUG_RE.test("-bad")).toBe(false);
     expect(SLUG_RE.test("bad-")).toBe(false);
+  });
+});
+
+describe("dealer modules", () => {
+  it("reads records from before tiers from their module list", () => {
+    const all = dealerModules({ modules: ["reports", "leads"], modulesOn: null, modulesOff: null });
+    expect(all).toEqual(["reports", "leads"]);
+  });
+  it("uses the stored exceptions once set, so new included modules appear", () => {
+    expect(dealerModules({ modules: [], modulesOn: [], modulesOff: ["reports"] })).not.toContain("reports");
+    expect(dealerModules({ modules: [], modulesOn: [], modulesOff: [] })).toContain("reports");
   });
 });

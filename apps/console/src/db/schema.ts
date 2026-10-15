@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb, index, boolean } from "drizzle-orm/pg-core";
 
 // The console's own database. It holds dealers' business details, plans and
 // module settings only, never their stock or customer data (that lives in
@@ -21,8 +21,17 @@ export const dealersTable = pgTable("dealers", {
   /** Public showroom address, if any. */
   showroomDomain: text("showroom_domain"),
   firstAdminEmail: text("first_admin_email").notNull(),
-  /** Module keys from @workspace/modules. */
+  /** The modules this dealer has today (for display). Derived from the exceptions below. */
   modules: jsonb("modules").$type<string[]>().notNull().default([]),
+  /** Premium modules switched on for this dealer. Null on records made before tiers (read from `modules`). */
+  modulesOn: jsonb("modules_on").$type<string[]>(),
+  /** Included modules switched off for this dealer. */
+  modulesOff: jsonb("modules_off").$type<string[]>(),
+  /** Pilot dealers get each release first; the rest only if every pilot updated cleanly. */
+  pilot: boolean("pilot").notNull().default(false),
+  /** Release (git commit) the dealer's site is running, and when it was updated. */
+  release: text("release"),
+  releasedAt: timestamp("released_at", { withTimezone: true }),
   /** draft | provisioning | active | failed | suspended */
   status: text("status").notNull().default("draft"),
   notes: text("notes"),
@@ -123,3 +132,40 @@ export const dealerDomainsTable = pgTable(
 ).enableRLS();
 
 export type DealerDomain = typeof dealerDomainsTable.$inferSelect;
+
+/** A release being rolled out to every dealer (one per commit on main / develop). */
+export const rolloutsTable = pgTable("rollouts", {
+  id: serial("id").primaryKey(),
+  /** Git commit being released. */
+  release: text("release").notNull(),
+  /** Commit message headline. */
+  title: text("title"),
+  /** running | done | failed | stopped */
+  status: text("status").notNull().default("running"),
+  startedBy: text("started_by").notNull(),
+  githubRunUrl: text("github_run_url"),
+  message: text("message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+}).enableRLS();
+
+export type Rollout = typeof rolloutsTable.$inferSelect;
+
+/** One dealer's part of a rollout. */
+export const rolloutDealersTable = pgTable(
+  "rollout_dealers",
+  {
+    id: serial("id").primaryKey(),
+    rolloutId: integer("rollout_id").notNull(),
+    dealerId: integer("dealer_id").notNull(),
+    /** 1 = pilot dealers, 2 = everyone else */
+    wave: integer("wave").notNull(),
+    /** waiting | running | done | failed | skipped */
+    status: text("status").notNull().default("waiting"),
+    message: text("message"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rollout_dealers_rollout_idx").on(t.rolloutId), index("rollout_dealers_dealer_idx").on(t.dealerId)],
+).enableRLS();
+
+export type RolloutDealer = typeof rolloutDealersTable.$inferSelect;

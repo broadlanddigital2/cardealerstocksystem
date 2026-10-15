@@ -6,41 +6,26 @@
 //
 // Env: DEALER_ID, RUN_ID, CONSOLE_DATABASE_URL, NEON_API_KEY, SENDGRID_API_KEY,
 //      CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, EMAIL_FROM, PLATFORM_DOMAIN
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import pg from "pg";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, "../../..");
-const webDir = path.join(repoRoot, "apps/web");
+import {
+  buildSite,
+  dealerNames,
+  deployDealerSite,
+  env,
+  migrateDatabase,
+  neon,
+  neonDatabaseUrl,
+  pgClient,
+  waitHealthy,
+  webDir,
+  wrangler,
+} from "./lib/dealer-site.mjs";
 
 // Same data-scope id every dealer site uses (apps/web/server/middlewares/requireAuth.ts).
 const SHARED_TENANT_ID = "user_3EdZv4RPs4Xi0cpKN6IiBWJ9dyz";
 const MARGIN_WORDING = "Margin Scheme – Second-hand Goods. No VAT is separately charged or reclaimable on this invoice.";
-const CRONS = ["*/15 * * * *", "*/30 * * * *", "0 6 * * *"];
-
-const env = (k, required = true) => {
-  const v = process.env[k];
-  if (required && !v) throw new Error(`${k} is not set`);
-  return v ?? "";
-};
-
-function pgClient(raw) {
-  const url = new URL(raw);
-  const isLocal = /^(localhost|127\.0\.0\.1)$/.test(url.hostname);
-  return new pg.Client({
-    host: url.hostname,
-    port: Number(url.port || 5432),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: url.pathname.replace(/^\//, "") || "postgres",
-    ssl: isLocal ? false : { rejectUnauthorized: false },
-    connectionTimeoutMillis: 30_000,
-  });
-}
 
 const dealerId = Number(env("DEALER_ID"));
 const runId = env("RUN_ID");
@@ -63,47 +48,12 @@ async function step(key, fn) {
   console.log(`✓ ${key}${message ? `: ${message}` : ""}`);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function neon(method, apiPath, body) {
-  const resp = await fetch(`https://console.neon.tech/api/v2${apiPath}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${env("NEON_API_KEY")}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await resp.text();
-  if (!resp.ok) throw new Error(`Neon API ${method} ${apiPath} failed (${resp.status}): ${text.slice(0, 300)}`);
-  return text ? JSON.parse(text) : {};
-}
-
-function run(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", ...opts });
-}
-
-function wrangler(args, extraEnv = {}) {
-  try {
-    return run("pnpm", ["--filter", "@workspace/web", "exec", "wrangler", ...args], { env: { ...process.env, ...extraEnv } });
-  } catch (err) {
-    const out = `${err.stdout ?? ""}\n${err.stderr ?? ""}`;
-    const e = new Error(out.split("\n").filter((l) => /ERROR|error|✘/.test(l)).slice(0, 4).join(" ").slice(0, 400) || err.message);
-    e.output = out;
-    throw e;
-  }
-}
-
 try {
   const { rows } = await consoleDb.query("select * from dealers where id = $1", [dealerId]);
   const dealer = rows[0];
   if (!dealer) throw new Error(`Dealer ${dealerId} not found`);
   const slug = dealer.slug;
-  const host = dealer.staff_domain || `${slug}-stockbook.${env("PLATFORM_DOMAIN", false) || "racecargraphics.uk"}`;
-  const siteUrl = `https://${host}`;
-  const workerName = `stockbook-${slug}`;
-  const bucketName = `stockbook-${slug}-files`;
+  const { host, siteUrl, workerName, bucketName } = dealerNames(dealer);
   const platformSecret = dealer.platform_secret || randomBytes(32).toString("hex");
   let databaseUrl = "";
 
@@ -117,34 +67,13 @@ try {
       databaseUrl = created.connection_uris?.[0]?.connection_uri ?? "";
       await consoleDb.query("update dealers set neon_project_id = $2 where id = $1", [dealerId, projectId]);
     }
-    if (!databaseUrl) {
-      const project = await neon("GET", `/projects/${projectId}`);
-      const branches = await neon("GET", `/projects/${projectId}/branches`);
-      const branch = branches.branches.find((b) => b.default) ?? branches.branches[0];
-      const dbs = await neon("GET", `/projects/${projectId}/branches/${branch.id}/databases`);
-      const database = dbs.databases[0];
-      const uri = await neon(
-        "GET",
-        `/projects/${projectId}/connection_uri?branch_id=${branch.id}&database_name=${encodeURIComponent(database.name)}&role_name=${encodeURIComponent(database.owner_name)}`,
-      );
-      databaseUrl = uri.uri;
-      void project;
-    }
+    if (!databaseUrl) databaseUrl = await neonDatabaseUrl(projectId);
     return `Neon project ${projectId}`;
   });
 
   await step("tables", async () => {
-    let lastErr;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      try {
-        run("pnpm", ["--filter", "@workspace/db", "run", "migrate"], { env: { ...process.env, DATABASE_URL: databaseUrl } });
-        return null;
-      } catch (err) {
-        lastErr = err;
-        await sleep(attempt * 5000); // a brand-new database can take a moment to accept connections
-      }
-    }
-    throw new Error(`Migrations failed: ${`${lastErr.stdout ?? ""}${lastErr.stderr ?? ""}`.split("\n").filter((l) => /Error/.test(l)).join(" ").slice(0, 300)}`);
+    await migrateDatabase(databaseUrl);
+    return null;
   });
 
   await step("files", async () => {
@@ -157,41 +86,14 @@ try {
     }
   });
 
-  const configPath = path.join(webDir, "wrangler.dealer.json");
   await step("site", async () => {
-    run("pnpm", ["--filter", "@workspace/web", "exec", "opennextjs-cloudflare", "build"], {
-      env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
-    });
-    const platformDomain = env("PLATFORM_DOMAIN", false) || "racecargraphics.uk";
-    const ownDomains = (
-      await consoleDb.query("select hostname from dealer_domains where dealer_id = $1 order by id", [dealerId])
-    ).rows.map((r) => r.hostname);
-    const baseConfig = readFileSync(path.join(webDir, "wrangler.jsonc"), "utf8");
-    const compatibilityDate = /"compatibility_date"\s*:\s*"([^"]+)"/.exec(baseConfig)?.[1] ?? "2026-09-27";
-    const config = {
-      name: workerName,
-      main: "worker.ts",
-      compatibility_date: compatibilityDate,
-      compatibility_flags: ["nodejs_compat"],
-      assets: { directory: ".open-next/assets", binding: "ASSETS" },
-      observability: { enabled: true },
-      routes: [
-        { pattern: host, custom_domain: true },
-        // The dealer's own addresses (added in the console) must survive a redeploy.
-        ...ownDomains.map((h) => ({ pattern: `${h}/*`, zone_name: platformDomain })),
-      ],
-      r2_buckets: [{ binding: "FILES", bucket_name: bucketName, jurisdiction: "eu" }],
-      triggers: { crons: CRONS },
-      vars: {
-        APP_URL: siteUrl,
-        ENQUIRY_EMAIL_FROM: env("EMAIL_FROM", false) || "noreply@racecargraphics.uk",
-        EMAIL_FROM_NAME: dealer.name,
-        RAPID_CAR_CHECK_DOMAIN: "motormetric-mg.co.uk",
-      },
-    };
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
-    wrangler(["deploy", "--config", "wrangler.dealer.json"]);
-    await consoleDb.query("update dealers set worker_name = $2 where id = $1", [dealerId, workerName]);
+    buildSite();
+    await deployDealerSite(consoleDb, dealer);
+    await consoleDb.query("update dealers set worker_name = $2, release = $3, released_at = now() where id = $1", [
+      dealerId,
+      workerName,
+      env("RELEASE", false) || null,
+    ]);
     return `Worker ${workerName} at ${host}`;
   });
 
@@ -235,7 +137,13 @@ try {
       await db.query(
         `insert into system_state (key, value) values ('site_modules', $1)
          on conflict (key) do update set value = excluded.value, updated_at = now()`,
-        [JSON.stringify({ enabled: dealer.modules ?? [] })],
+        [
+          JSON.stringify(
+            dealer.modules_on == null && dealer.modules_off == null
+              ? { enabled: dealer.modules ?? [] }
+              : { on: dealer.modules_on ?? [], off: dealer.modules_off ?? [] },
+          ),
+        ],
       );
     } finally {
       await db.end();
@@ -245,16 +153,8 @@ try {
 
   await step("check", async () => {
     // A new custom domain can take a few minutes to get its certificate.
-    for (let attempt = 1; attempt <= 30; attempt++) {
-      try {
-        const resp = await fetch(`${siteUrl}/api/healthz`, { signal: AbortSignal.timeout(10_000) });
-        if (resp.ok) return `${siteUrl} is up`;
-      } catch {
-        // not reachable yet
-      }
-      await sleep(10_000);
-    }
-    throw new Error(`${siteUrl} didn't answer within 5 minutes. It may still be getting its certificate; try setup again shortly.`);
+    await waitHealthy(siteUrl, null, 5);
+    return `${siteUrl} is up`;
   });
 
   await step("invite", async () => {

@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
-import { ALL_MODULES } from "@/lib/dealers";
+import { DEFAULT_MODULES } from "@/lib/dealers";
 import { Shell } from "@/components/Shell";
 import { DealerForm } from "@/components/DealerForm";
 import { createDealerAction } from "../../actions";
@@ -18,7 +18,7 @@ export default async function NewDealerPage() {
         values={{
           name: "", slug: "", companyNumber: "", contactName: "", contactEmail: "", contactPhone: "",
           billingEmail: "", webDomain: "", staffDomain: "", showroomDomain: "", firstAdminEmail: "",
-          modules: ALL_MODULES, notes: "",
+          modules: DEFAULT_MODULES, pilot: false, notes: "",
         }}
       />
     </Shell>

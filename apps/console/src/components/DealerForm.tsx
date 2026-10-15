@@ -20,6 +20,7 @@ export interface DealerFormValues {
   showroomDomain: string;
   firstAdminEmail: string;
   modules: string[];
+  pilot: boolean;
   notes: string;
   slugLocked?: boolean;
 }
@@ -105,18 +106,40 @@ export function DealerForm({
 
       <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="font-semibold">Modules</h2>
-        <p className="text-sm text-slate-500">What this dealer has. The stock book itself is always included.</p>
+        <p className="text-sm text-slate-500">
+          What this dealer has. The stock book itself is always included. <strong>Included</strong> modules are on for
+          every dealer unless you untick them here; <strong>Premium</strong> modules are off unless you tick them. New
+          modules follow the same rule when a release goes out.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {MODULES.map((m) => (
             <label key={m.key} className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
               <input type="checkbox" name="module" value={m.key} defaultChecked={values.modules.includes(m.key)} className="mt-1" />
               <span>
-                <span className="block text-sm font-medium">{m.name}</span>
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  {m.name}
+                  {(m.tier as string) === "premium" && (
+                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800">Premium</span>
+                  )}
+                </span>
                 <span className="block text-xs text-slate-500">{m.description}</span>
               </span>
             </label>
           ))}
         </div>
+      </section>
+
+      <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-6">
+        <h2 className="font-semibold">Updates</h2>
+        <label className="flex items-start gap-3">
+          <input type="checkbox" name="pilot" defaultChecked={values.pilot} className="mt-1" />
+          <span>
+            <span className="block text-sm font-medium">Pilot dealer</span>
+            <span className="block text-xs text-slate-500">
+              Gets each new release first. Everyone else is only updated once every pilot dealer has updated cleanly.
+            </span>
+          </span>
+        </label>
       </section>
 
       <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-6">

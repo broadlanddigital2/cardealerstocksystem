@@ -7,6 +7,7 @@ import {
   deleteRole,
   getSiteModules,
   listRoles,
+  getSiteModuleSetting,
   setSiteModules,
   updateRole,
 } from "../lib/modules";
@@ -17,7 +18,7 @@ import {
 //   PATCH  /roles/:key        { name?, modules? }      rename / change modules
 //   DELETE /roles/:key        its people move to the default Staff role
 // Platform (Broadland Digital only, Authorization: Bearer <PLATFORM_SECRET>):
-//   GET/PUT /platform/modules { enabled: [module keys] }  which modules this dealer has
+//   GET/PUT /platform/modules { on, off }  this dealer's module exceptions (GET also returns the resulting "enabled" list)
 const router = new Router();
 
 router.use("/roles", requireAdmin);
@@ -98,7 +99,7 @@ router.get("/platform/modules", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  res.json({ enabled: await getSiteModules() });
+  res.json({ enabled: await getSiteModules(), ...(await getSiteModuleSetting()) });
 });
 
 router.put("/platform/modules", async (req, res): Promise<void> => {
@@ -106,12 +107,13 @@ router.put("/platform/modules", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const body = (req.body ?? {}) as { enabled?: unknown };
-  if (!Array.isArray(body.enabled)) {
-    res.status(400).json({ error: "Send { enabled: [module keys] }." });
+  const body = (req.body ?? {}) as { enabled?: unknown; on?: unknown; off?: unknown };
+  if (!Array.isArray(body.enabled) && !Array.isArray(body.on) && !Array.isArray(body.off)) {
+    res.status(400).json({ error: "Send { on: [module keys], off: [module keys] }." });
     return;
   }
-  res.json({ enabled: await setSiteModules(body.enabled) });
+  const enabled = await setSiteModules(body);
+  res.json({ enabled, ...(await getSiteModuleSetting()) });
 });
 
 export default router;
