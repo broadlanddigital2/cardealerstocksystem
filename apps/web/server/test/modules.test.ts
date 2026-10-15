@@ -39,7 +39,7 @@ describe("module tiers and dealer exceptions", () => {
     const chosen = MODULE_KEYS.filter((k) => k !== "reports");
     const o = overridesFromList(chosen);
     expect(o.off).toEqual(["reports"]);
-    expect(resolveModules(o)).toEqual(cleanModuleList([...chosen, ...PREMIUM_MODULES.filter((k) => chosen.includes(k))]));
+    expect(resolveModules(o)).toEqual(cleanModuleList(chosen));
   });
   it("reads the earlier full-list format as exceptions", () => {
     expect(readModuleSetting({ enabled: MODULE_KEYS.filter((k) => k !== "leads") })).toEqual({ on: [], off: ["leads"] });
