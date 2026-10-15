@@ -9,6 +9,7 @@ export function Shell({ admin, children }: { admin: string; children: ReactNode 
           <nav className="flex items-center gap-5">
             <a href="/" className="font-bold">Stock Book Console</a>
             <a href="/" className="text-sm text-slate-600 hover:text-slate-900">Dealers</a>
+            <a href="/modules" className="text-sm text-slate-600 hover:text-slate-900">Modules</a>
             <a href="/releases" className="text-sm text-slate-600 hover:text-slate-900">Releases</a>
           </nav>
           <div className="flex items-center gap-4 text-sm text-slate-500">

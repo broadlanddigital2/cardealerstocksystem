@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { dealerHistory, dealerModules, getDealer } from "@/lib/dealers";
+import { dealerChoices, dealerHistory, getDealer } from "@/lib/dealers";
+import { getCatalogue } from "@/lib/catalogue";
 import { Shell, StatusBadge } from "@/components/Shell";
 import { DealerForm } from "@/components/DealerForm";
 import { updateDealerAction } from "../../actions";
@@ -21,6 +22,8 @@ const ACTIONS: Record<string, string> = {
   "dealer.setup_failed": "Setup failed",
   "domain.added": "Address added",
   "dealer.update_started": "Update started",
+  "module.tier": "Module tier changed (all dealers)",
+  "module.enabled": "Module switched on/off for everyone",
   "domain.removed": "Address removed",
 };
 
@@ -38,6 +41,7 @@ export default async function DealerPage({
   const sp = await searchParams;
   const saved = sp.saved === "1";
   const steps = await latestSteps(dealer.id);
+  const catalogue = await getCatalogue();
   let domains = dealer.status === "active" ? await listDomains(dealer.id) : [];
   // Waiting addresses are re-checked with Cloudflare when the page opens (at most once a minute).
   domains = await Promise.all(
@@ -130,6 +134,7 @@ export default async function DealerPage({
 
       <DealerForm
         action={updateDealerAction}
+        catalogue={catalogue}
         submitLabel="Save changes"
         values={{
           id: dealer.id,
@@ -145,7 +150,7 @@ export default async function DealerPage({
           staffDomain: s(dealer.staffDomain),
           showroomDomain: s(dealer.showroomDomain),
           firstAdminEmail: dealer.firstAdminEmail,
-          modules: dealerModules(dealer),
+          modules: dealerChoices(dealer, catalogue),
           pilot: dealer.pilot,
           notes: s(dealer.notes),
         }}

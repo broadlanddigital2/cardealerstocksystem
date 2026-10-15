@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { dealerModules, listDealers } from "@/lib/dealers";
+import { getCatalogue } from "@/lib/catalogue";
 import { Shell, StatusBadge } from "@/components/Shell";
 import { shortRelease } from "@/lib/releases";
 
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DealersPage() {
   const admin = await requireAdmin();
-  const dealers = await listDealers();
+  const [dealers, catalogue] = await Promise.all([listDealers(), getCatalogue()]);
   return (
     <Shell admin={admin}>
       <div className="flex items-center justify-between">
@@ -41,7 +42,7 @@ export default async function DealersPage() {
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">{d.slug}</td>
                   <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-3 text-slate-500">{dealerModules(d).length}</td>
+                  <td className="px-4 py-3 text-slate-500">{dealerModules(d, catalogue).length}</td>
                   <td className="px-4 py-3">
                     <span className="font-mono text-xs">{d.status === "active" ? shortRelease(d.release) : "—"}</span>
                     {d.pilot && <span className="ml-2 rounded-full bg-sky-100 px-2 text-[11px] text-sky-800">pilot</span>}

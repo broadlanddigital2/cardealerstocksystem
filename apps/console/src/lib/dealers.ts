@@ -2,11 +2,11 @@
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import {
-  INCLUDED_MODULES,
   cleanModuleList,
   overridesFromList,
   readModuleSetting,
   resolveModules,
+  type ModuleCatalogue,
   type ModuleOverrides,
 } from "@workspace/modules";
 import { auditLogTable, dealersTable, getDb, type Dealer } from "@/db/client";
@@ -84,19 +84,35 @@ export function readDealerForm(form: FormData) {
 
 /** A dealer's module exceptions (records from before tiers are read from their module list). */
 export function dealerOverrides(dealer: Pick<Dealer, "modules" | "modulesOn" | "modulesOff">): ModuleOverrides {
-  if (dealer.modulesOn == null && dealer.modulesOff == null) return readModuleSetting({ enabled: dealer.modules });
-  return readModuleSetting({ on: dealer.modulesOn ?? [], off: dealer.modulesOff ?? [] });
+  const s =
+    dealer.modulesOn == null && dealer.modulesOff == null
+      ? readModuleSetting({ enabled: dealer.modules })
+      : readModuleSetting({ on: dealer.modulesOn ?? [], off: dealer.modulesOff ?? [] });
+  return { on: s.on, off: s.off };
 }
 
-/** The modules a dealer has with today's catalogue. */
-export function dealerModules(dealer: Pick<Dealer, "modules" | "modulesOn" | "modulesOff">) {
-  return resolveModules(dealerOverrides(dealer));
+/** The modules a dealer has, given the platform-wide settings from the Modules page. */
+export function dealerModules(dealer: Pick<Dealer, "modules" | "modulesOn" | "modulesOff">, catalogue?: ModuleCatalogue) {
+  return resolveModules({ ...dealerOverrides(dealer), catalogue });
 }
 
-/** Saves the ticked modules as exceptions, so later included modules reach the dealer automatically. */
-function moduleColumns(list: string[]) {
-  const o = overridesFromList(list);
-  return { modules: resolveModules(o), modulesOn: o.on, modulesOff: o.off };
+/** What the dealer has chosen, ignoring modules switched off for everyone (so their choice survives). */
+export function dealerChoices(dealer: Pick<Dealer, "modules" | "modulesOn" | "modulesOff">, catalogue?: ModuleCatalogue) {
+  const allOn = Object.fromEntries(
+    Object.entries(catalogue ?? {}).map(([k, v]) => [k, { ...v, enabled: true }]),
+  ) as ModuleCatalogue;
+  return resolveModules({ ...dealerOverrides(dealer), catalogue: allOn });
+}
+
+/** Saves the chosen modules as exceptions, so later core modules reach the dealer automatically. */
+export function moduleColumns(list: string[], catalogue?: ModuleCatalogue) {
+  const o = overridesFromList(list, catalogue);
+  return { modules: resolveModules({ ...o, catalogue }), modulesOn: o.on, modulesOff: o.off };
+}
+
+async function currentCatalogue(): Promise<ModuleCatalogue> {
+  const { getCatalogue } = await import("@/lib/catalogue");
+  return getCatalogue();
 }
 
 export async function listDealers(): Promise<Dealer[]> {
@@ -117,7 +133,7 @@ export async function createDealer(input: DealerInput, actor: string): Promise<D
   const db = getDb();
   const [row] = await db
     .insert(dealersTable)
-    .values({ ...input, ...moduleColumns(input.modules), status: "draft" })
+    .values({ ...input, ...moduleColumns(input.modules, await currentCatalogue()), status: "draft" })
     .returning();
   await db.insert(auditLogTable).values({ actorEmail: actor, dealerId: row!.id, action: "dealer.created", detail: input });
   return row!;
@@ -129,12 +145,13 @@ export async function updateDealer(id: number, input: DealerInput, actor: string
   if (!before) throw new Error("Dealer not found");
   // The short id names the dealer's resources, so it is fixed once provisioned.
   const slug = before.status === "draft" ? input.slug : before.slug;
+  const catalogue = await currentCatalogue();
   const [row] = await db
     .update(dealersTable)
-    .set({ ...input, ...moduleColumns(input.modules), slug })
+    .set({ ...input, ...moduleColumns(input.modules, catalogue), slug })
     .where(eq(dealersTable.id, id))
     .returning();
-  const previous = { ...before, modules: dealerModules(before) } as Record<string, unknown>;
+  const previous = { ...before, modules: dealerModules(before, catalogue) } as Record<string, unknown>;
   const changed = Object.fromEntries(
     Object.entries(input).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(previous[k])),
   );
@@ -151,5 +168,7 @@ export async function dealerHistory(id: number) {
     .limit(50);
 }
 
-/** Ticked by default for a new dealer: every included module. */
-export const DEFAULT_MODULES = [...INCLUDED_MODULES];
+/** Switched on by default for a new dealer: every core module that's on for everyone. */
+export function defaultModules(catalogue?: ModuleCatalogue) {
+  return dealerChoices({ modules: [], modulesOn: [], modulesOff: [] }, catalogue);
+}
