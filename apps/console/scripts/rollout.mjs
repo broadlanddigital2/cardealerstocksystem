@@ -36,6 +36,7 @@ let rolloutId = Number(env("ROLLOUT_ID", false)) || null;
 async function finish(status, message) {
   await q("update rollouts set status = $2, message = $3, finished_at = now() where id = $1", [rolloutId, status, message]);
   console.log(`${status === "done" ? "✓" : "✘"} ${message}`);
+  console.log(`::${status === "done" ? "notice" : "error"} title=Release ${release.slice(0, 7)}::${message}`);
 }
 
 async function setDealer(dealerId, status, message = null) {
@@ -48,6 +49,7 @@ async function setDealer(dealerId, status, message = null) {
 async function releaseTo(dealer) {
   if (!force && dealer.release === release) {
     await setDealer(dealer.id, "skipped", "Already on this release");
+    console.log(`::notice title=${dealer.name}::Already on ${release.slice(0, 7)}`);
     return true;
   }
   await setDealer(dealer.id, "running", "Updating database");
@@ -61,12 +63,13 @@ async function releaseTo(dealer) {
     await waitHealthy(siteUrl, release, 5);
     await q("update dealers set release = $2, released_at = now(), updated_at = now() where id = $1", [dealer.id, release]);
     await setDealer(dealer.id, "done", `Live on ${release.slice(0, 7)}`);
-    console.log(`✓ ${dealer.name}`);
+    console.log(`::notice title=${dealer.name}::Live on ${release.slice(0, 7)}`);
     return true;
   } catch (err) {
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
     await setDealer(dealer.id, "failed", message);
     console.error(`Error: ${dealer.name}: ${message}`);
+    console.log(`::error title=${dealer.name}::${message.replace(/\n/g, " ")}`);
     if (err?.output) console.error(err.output.slice(-2000));
     return false;
   }
