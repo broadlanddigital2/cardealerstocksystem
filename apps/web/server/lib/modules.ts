@@ -18,7 +18,7 @@ import {
   readModuleSetting,
   resolveModules,
   type ModuleKey,
-  type ModuleOverrides,
+  type ModuleSetting,
 } from "../../src/lib/modules";
 import { getEmailRole, getSessionUserId, getUserEmail } from "../middlewares/requireAuth";
 
@@ -108,11 +108,11 @@ export async function modulesForRole(roleKey: string): Promise<ModuleKey[]> {
 }
 
 /** This dealer's module exceptions as stored. */
-export async function getSiteModuleSetting(): Promise<ModuleOverrides> {
+export async function getSiteModuleSetting(): Promise<ModuleSetting> {
   return readModuleSetting(await readState(SITE_KEY));
 }
 
-/** Saves the dealer's module exceptions. Accepts { on, off } or a full { enabled } list. */
+/** Saves the dealer's module exceptions and the platform settings sent with them ({ on, off, catalogue }; a full { enabled } list also works). */
 export async function setSiteModules(body: unknown): Promise<ModuleKey[]> {
   const value = readModuleSetting(body);
   await db

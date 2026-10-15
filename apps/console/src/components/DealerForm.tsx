@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { MODULES } from "@workspace/modules";
+import { MODULES, moduleAvailable, moduleTier, type ModuleCatalogue } from "@workspace/modules";
+import { Toggle } from "./Toggle";
 import type { FormState } from "../../app/actions";
 
 const input = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-100";
@@ -50,8 +51,10 @@ export function DealerForm({
   values,
   action,
   submitLabel,
+  catalogue,
 }: {
   values: DealerFormValues;
+  catalogue: ModuleCatalogue;
   action: (prev: FormState, form: FormData) => Promise<FormState>;
   submitLabel: string;
 }) {
@@ -105,28 +108,47 @@ export function DealerForm({
       </section>
 
       <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="font-semibold">Modules</h2>
-        <p className="text-sm text-slate-500">
-          What this dealer has. The stock book itself is always included. <strong>Included</strong> modules are on for
-          every dealer unless you untick them here; <strong>Premium</strong> modules are off unless you tick them. New
-          modules follow the same rule when a release goes out.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {MODULES.map((m) => (
-            <label key={m.key} className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
-              <input type="checkbox" name="module" value={m.key} defaultChecked={values.modules.includes(m.key)} className="mt-1" />
-              <span>
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  {m.name}
-                  {(m.tier as string) === "premium" && (
-                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800">Premium</span>
-                  )}
-                </span>
-                <span className="block text-xs text-slate-500">{m.description}</span>
-              </span>
-            </label>
-          ))}
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">Modules</h2>
+          <a href="/modules" className="text-xs text-slate-500 hover:underline">Core / premium settings →</a>
         </div>
+        <p className="text-sm text-slate-500">
+          What this dealer has. The stock book itself is always included. <strong>Core</strong> modules are on unless you
+          switch them off here; <strong>Premium</strong> modules are off unless you switch them on.
+        </p>
+        <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
+          {MODULES.map((m) => {
+            const tier = moduleTier(m.key, catalogue);
+            const available = moduleAvailable(m.key, catalogue);
+            const chosen = values.modules.includes(m.key);
+            return (
+              <li key={m.key} className={`flex items-start justify-between gap-4 p-3 ${available ? "" : "bg-slate-50"}`}>
+                <span>
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    {m.name}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        tier === "premium" ? "bg-violet-100 text-violet-800" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {tier === "premium" ? "Premium" : "Core"}
+                    </span>
+                  </span>
+                  <span className="block text-xs text-slate-500">{m.description}</span>
+                  {!available && <span className="block text-xs text-amber-700">Switched off for everyone on the Modules page.</span>}
+                </span>
+                {available ? (
+                  <Toggle name="module" value={m.key} defaultChecked={chosen} label={m.name} />
+                ) : (
+                  <>
+                    {chosen && <input type="hidden" name="module" value={m.key} />}
+                    <Toggle value={m.key} defaultChecked={false} label={m.name} disabled />
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-6">

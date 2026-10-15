@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SLUG_RE, dealerInput, dealerModules } from "./dealers";
+import { SLUG_RE, dealerChoices, dealerInput, dealerModules, defaultModules } from "./dealers";
 
 const base = { name: "Manor Garage", slug: "manor-garage", firstAdminEmail: "Owner@Example.co.uk", modules: ["reports", "nope"] };
 
@@ -28,5 +28,18 @@ describe("dealer modules", () => {
   it("uses the stored exceptions once set, so new included modules appear", () => {
     expect(dealerModules({ modules: [], modulesOn: [], modulesOff: ["reports"] })).not.toContain("reports");
     expect(dealerModules({ modules: [], modulesOn: [], modulesOff: [] })).toContain("reports");
+  });
+});
+
+describe("modules switched off for everyone", () => {
+  it("keeps the dealer's own choice for when the module comes back", () => {
+    const dealer = { modules: [], modulesOn: [], modulesOff: [] };
+    const catalogue = { leads: { enabled: false } };
+    expect(dealerModules(dealer, catalogue)).not.toContain("leads");
+    expect(dealerChoices(dealer, catalogue)).toContain("leads");
+  });
+  it("starts new dealers with core modules only", () => {
+    expect(defaultModules({ reports: { tier: "premium" } })).not.toContain("reports");
+    expect(defaultModules({})).toContain("reports");
   });
 });

@@ -138,11 +138,18 @@ try {
         `insert into system_state (key, value) values ('site_modules', $1)
          on conflict (key) do update set value = excluded.value, updated_at = now()`,
         [
-          JSON.stringify(
-            dealer.modules_on == null && dealer.modules_off == null
+          JSON.stringify({
+            ...(dealer.modules_on == null && dealer.modules_off == null
               ? { enabled: dealer.modules ?? [] }
-              : { on: dealer.modules_on ?? [], off: dealer.modules_off ?? [] },
-          ),
+              : { on: dealer.modules_on ?? [], off: dealer.modules_off ?? [] }),
+            // Platform-wide tiers and on/off-for-everyone from the console's Modules page.
+            catalogue: Object.fromEntries(
+              (await consoleDb.query("select key, tier, enabled from module_settings")).rows.map((r) => [
+                r.key,
+                { tier: r.tier, enabled: r.enabled },
+              ]),
+            ),
+          }),
         ],
       );
     } finally {

@@ -4,6 +4,12 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { auditLogTable, dealersTable, getDb, setupStepsTable, type Dealer } from "@/db/client";
 import { dealerOverrides } from "@/lib/dealers";
+import type { ModuleCatalogue } from "@workspace/modules";
+
+async function currentCatalogue(): Promise<ModuleCatalogue> {
+  const { getCatalogue } = await import("@/lib/catalogue");
+  return getCatalogue();
+}
 
 export const SETUP_STEPS = [
   { key: "database", label: "Create the dealer's database (Neon, London)" },
@@ -90,13 +96,13 @@ export async function startSetup(dealer: Dealer, actor: string): Promise<void> {
 }
 
 /** Sends a dealer's modules to their live site. Returns an error message or null. */
-export async function pushModules(dealer: Dealer): Promise<string | null> {
+export async function pushModules(dealer: Dealer, catalogue?: ModuleCatalogue): Promise<string | null> {
   if (dealer.status !== "active" || !dealer.siteUrl || !dealer.platformSecret) return null;
   try {
     const resp = await fetch(`${dealer.siteUrl}/api/platform/modules`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${dealer.platformSecret}`, "Content-Type": "application/json" },
-      body: JSON.stringify(dealerOverrides(dealer)),
+      body: JSON.stringify({ ...dealerOverrides(dealer), catalogue: catalogue ?? (await currentCatalogue()) }),
       signal: AbortSignal.timeout(15_000),
     });
     return resp.ok ? null : `The dealer's site answered ${resp.status}.`;

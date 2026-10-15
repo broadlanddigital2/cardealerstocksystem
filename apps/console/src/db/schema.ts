@@ -169,3 +169,19 @@ export const rolloutDealersTable = pgTable(
 ).enableRLS();
 
 export type RolloutDealer = typeof rolloutDealersTable.$inferSelect;
+
+/**
+ * Platform-wide module settings (the Modules page): each module's tier
+ * (core / premium) and whether it's on for everyone. A module with no row
+ * uses the defaults from @workspace/modules.
+ */
+export const moduleSettingsTable = pgTable("module_settings", {
+  key: text("key").primaryKey(),
+  /** core | premium */
+  tier: text("tier").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+export type ModuleSettingRow = typeof moduleSettingsTable.$inferSelect;

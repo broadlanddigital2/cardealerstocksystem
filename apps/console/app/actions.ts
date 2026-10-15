@@ -7,6 +7,7 @@ import { createDealer, getDealer, readDealerForm, slugTaken, updateDealer } from
 import { pushModules, startSetup } from "@/lib/setup";
 import { addDomain, checkDomain, listDomains, removeDomain } from "@/lib/domains";
 import { startRelease } from "@/lib/releases";
+import { setModuleEnabled, setModuleTier } from "@/lib/catalogue";
 
 export interface FormState {
   error: string | null;
@@ -135,4 +136,20 @@ export async function startReleaseAction(_prev: FormState, form: FormData): Prom
   }
   revalidatePath("/releases");
   redirect("/releases");
+}
+
+function backToModules(failed: string[]): never {
+  revalidatePath("/modules");
+  const q = failed.length ? `?unreached=${encodeURIComponent(failed.join(", "))}` : "?saved=1";
+  redirect(`/modules${q}`);
+}
+
+export async function setModuleTierAction(form: FormData): Promise<void> {
+  const actor = await requireAdmin();
+  backToModules(await setModuleTier(form.get("key"), form.get("tier"), actor));
+}
+
+export async function setModuleEnabledAction(form: FormData): Promise<void> {
+  const actor = await requireAdmin();
+  backToModules(await setModuleEnabled(form.get("key"), form.get("enabled") === "true", actor));
 }
