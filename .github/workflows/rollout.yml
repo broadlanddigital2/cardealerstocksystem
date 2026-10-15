@@ -1,0 +1,106 @@
+name: Release to dealers
+
+# Updates every dealer's own site to one release (same code, separate data):
+# pilot dealers first, then everyone else. Progress shows on the console's
+# Releases page. Runs automatically after the console deploys (Deploy console
+# -> this), and can be started from the console or by hand.
+#   develop -> dealers in the dev console
+#   main    -> dealers in the live console
+#
+# Repository secrets: CONSOLE_DATABASE_URL, CONSOLE_DEV_DATABASE_URL, NEON_API_KEY,
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which console's dealers"
+        type: choice
+        options: [dev, live]
+        default: dev
+      rollout_id:
+        description: "Release id (set by the console)"
+        required: false
+      dealer_id:
+        description: "Only this dealer (optional)"
+        required: false
+      force:
+        description: "Redeploy dealers already on this release"
+        type: boolean
+        default: false
+      started_by:
+        description: "Who started it"
+        required: false
+
+concurrency:
+  group: release-to-dealers-${{ inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release to ${{ inputs.target }} dealers
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DEV_DB: ${{ secrets.CONSOLE_DEV_DATABASE_URL }}
+      LIVE_DB: ${{ secrets.CONSOLE_DATABASE_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EMAIL_FROM: noreply@racecargraphics.uk
+      PLATFORM_DOMAIN: racecargraphics.uk
+      ROLLOUT_ID: ${{ inputs.rollout_id }}
+      DEALER_ID: ${{ inputs.dealer_id }}
+      FORCE: ${{ inputs.force }}
+      STARTED_BY: ${{ inputs.started_by || 'release pipeline' }}
+      GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Pick target
+        id: t
+        run: |
+          if [ "${{ inputs.target }}" = "dev" ]; then db="$DEV_DB"; ref=develop; else db="$LIVE_DB"; ref=main; fi
+          echo "ref=${{ inputs.sha }}" >> "$GITHUB_OUTPUT"
+          [ -n "${{ inputs.sha }}" ] || echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          [ -n "$db" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$db"
+          echo "CONSOLE_DATABASE_URL=$db" >> "$GITHUB_ENV"
+      - name: Not configured yet
+        if: steps.t.outputs.ready != 'true'
+        run: echo "::notice title=Release skipped::The console database secret for this target isn't set yet."
+      - uses: actions/checkout@v4
+        if: steps.t.outputs.ready == 'true'
+        with:
+          ref: ${{ steps.t.outputs.ref }}
+      - name: Release support in this version?
+        id: has
+        if: steps.t.outputs.ready == 'true'
+        run: |
+          if [ -f apps/console/scripts/rollout.mjs ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice title=Release skipped::This version doesn't include the release script yet."; fi
+      - uses: pnpm/action-setup@v4
+        if: steps.has.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.has.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.has.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Release
+        if: steps.has.outputs.ok == 'true'
+        run: |
+          export RELEASE="$(git rev-parse HEAD)"
+          export RELEASE_TITLE="$(git log -1 --format=%s)"
+          .github/scripts/step.sh "Release to dealers" node apps/console/scripts/rollout.mjs
