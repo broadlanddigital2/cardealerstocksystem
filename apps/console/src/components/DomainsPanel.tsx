@@ -1,13 +1,22 @@
 import type { DealerDomain } from "@/db/client";
 import { cnameTarget } from "@/lib/domains";
-import { checkDomainAction, checkDomainsAction, removeDomainAction } from "../../app/actions";
+import { applyDomainDnsAction, checkDomainAction, checkDomainsAction, removeDomainAction } from "../../app/actions";
+import { canEditZone, findZone } from "@/lib/cloudflare-dns";
+import { ApplyDnsButton } from "./ApplyDnsButton";
 import { CheckButton } from "./CheckButton";
 import { AddDomainForm } from "./AddDomainForm";
 import { CopyButton } from "./CopyButton";
 
 const KIND: Record<string, string> = { staff: "Staff", showroom: "Showroom" };
 
-export function DomainsPanel({ dealerId, domains }: { dealerId: number; domains: DealerDomain[] }) {
+export async function DomainsPanel({ dealerId, domains }: { dealerId: number; domains: DealerDomain[] }) {
+  // Addresses whose DNS is in our Cloudflare account can have their record added for them.
+  const editable = new Map<number, string>();
+  for (const d of domains) {
+    if (d.status === "active") continue;
+    const zone = await findZone(d.hostname);
+    if (zone && (await canEditZone(zone.id))) editable.set(d.id, zone.name);
+  }
   return (
     <section id="domains" className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
       <div className="flex items-center justify-between gap-4">
@@ -55,6 +64,19 @@ export function DomainsPanel({ dealerId, domains }: { dealerId: number; domains:
               </div>
               {d.status !== "active" && (
                 <div className="mt-3 overflow-x-auto">
+                  {editable.has(d.id) && (
+                    <div className="mb-2 rounded-md bg-orange-50 p-3">
+                      <p className="mb-2 text-xs text-orange-900">
+                        {d.hostname} is in your Cloudflare account ({editable.get(d.id)}), so the console can add the record.
+                      </p>
+                      <ApplyDnsButton
+                        action={applyDomainDnsAction}
+                        fields={{ id: dealerId, domainId: d.id }}
+                        label="Add the record in Cloudflare"
+                        confirmText={`Add the DNS record for ${d.hostname} in Cloudflare?\n\nIf something else already uses that name (e.g. a website A record) it's left alone and you'll be told.`}
+                      />
+                    </div>
+                  )}
                   <p className="text-xs text-slate-500">DNS records to add at the dealer&apos;s domain provider:</p>
                   <table className="mt-1 w-full text-xs">
                     <thead className="text-left text-slate-500">

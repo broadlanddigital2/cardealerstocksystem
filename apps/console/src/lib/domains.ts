@@ -18,7 +18,7 @@ interface CfResult<T> {
   result: T;
 }
 
-async function cf<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function cf<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!token) throw new Error("The console can't manage domains yet (CLOUDFLARE_API_TOKEN isn't set).");
   const resp = await fetch(`https://api.cloudflare.com/client/v4${path}`, {

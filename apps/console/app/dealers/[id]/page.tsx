@@ -25,6 +25,8 @@ const ACTIONS: Record<string, string> = {
   "dealer.update_started": "Update started",
   "module.tier": "Module tier changed (all dealers)",
   "email.domain_added": "Email domain set up",
+  "email.dns_applied": "Email DNS records added in Cloudflare",
+  "domain.dns_applied": "Web address DNS record added in Cloudflare",
   "email.mailbox_invited": "Mailbox invitation sent",
   "email.mailbox_created": "Mailbox created",
   "email.password_reset": "Mailbox password reset",
