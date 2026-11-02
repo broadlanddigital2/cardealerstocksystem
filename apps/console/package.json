@@ -10,9 +10,9 @@
     "test": "vitest run",
     "generate": "drizzle-kit generate --dialect postgresql --schema ./src/db/schema.ts --out ./migrations",
     "migrate": "node scripts/migrate.mjs",
-    "cloudflare:build": "opennextjs-cloudflare build",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "deploy:dev": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --env dev"
+    "cloudflare:build": "opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion",
+    "deploy": "opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion && opennextjs-cloudflare deploy",
+    "deploy:dev": "opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion && opennextjs-cloudflare deploy --env dev"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",

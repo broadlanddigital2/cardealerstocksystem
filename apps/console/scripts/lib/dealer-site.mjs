@@ -78,7 +78,7 @@ export function wrangler(args, extraEnv = {}) {
 
 /** Builds the dealer site once (the build is the same for every dealer). */
 export function buildSite() {
-  run("pnpm", ["--filter", "@workspace/web", "exec", "opennextjs-cloudflare", "build"], {
+  run("pnpm", ["--filter", "@workspace/web", "exec", "opennextjs-cloudflare", "build", "--dangerouslyUseUnsupportedNextVersion"], {
     env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
   });
 }

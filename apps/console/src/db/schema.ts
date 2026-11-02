@@ -39,6 +39,9 @@ export const dealersTable = pgTable("dealers", {
   neonProjectId: text("neon_project_id"),
   workerName: text("worker_name"),
   siteUrl: text("site_url"),
+  /** Email hosting (TrekMail): the dealer's email domain and its TrekMail domain id. */
+  emailDomain: text("email_domain"),
+  trekmailDomainId: integer("trekmail_domain_id"),
   /** Lets the console change this dealer's modules (Bearer token for /api/platform/modules). */
   platformSecret: text("platform_secret"),
   provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
