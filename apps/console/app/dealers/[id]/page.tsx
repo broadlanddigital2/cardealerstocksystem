@@ -9,6 +9,7 @@ import { SetupButton } from "@/components/SetupButton";
 import { ReleaseButton } from "@/components/ReleaseButton";
 import { shortRelease } from "@/lib/releases";
 import { DomainsPanel } from "@/components/DomainsPanel";
+import { EmailPanel } from "@/components/EmailPanel";
 import { checkDomain, listDomains } from "@/lib/domains";
 import { SETUP_STEPS, latestSteps, siteHost } from "@/lib/setup";
 
@@ -23,6 +24,13 @@ const ACTIONS: Record<string, string> = {
   "domain.added": "Address added",
   "dealer.update_started": "Update started",
   "module.tier": "Module tier changed (all dealers)",
+  "email.domain_added": "Email domain set up",
+  "email.mailbox_invited": "Mailbox invitation sent",
+  "email.mailbox_created": "Mailbox created",
+  "email.password_reset": "Mailbox password reset",
+  "email.mailbox_deleted": "Mailbox deleted",
+  "email.forwarding_added": "Forwarding address added",
+  "email.forwarding_removed": "Forwarding address removed",
   "module.enabled": "Module switched on/off for everyone",
   "domain.removed": "Address removed",
 };
@@ -131,6 +139,8 @@ export default async function DealerPage({
       )}
 
       {dealer.status === "active" && <DomainsPanel dealerId={dealer.id} domains={domains} />}
+
+      <EmailPanel dealer={dealer} />
 
       <DealerForm
         action={updateDealerAction}

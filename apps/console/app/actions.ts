@@ -8,6 +8,17 @@ import { pushModules, startSetup } from "@/lib/setup";
 import { addDomain, checkDomain, listDomains, removeDomain } from "@/lib/domains";
 import { startRelease } from "@/lib/releases";
 import { setModuleEnabled, setModuleTier } from "@/lib/catalogue";
+import {
+  addForwarding,
+  createMailbox,
+  deleteMailbox,
+  inviteMailbox,
+  recheckDns,
+  removeForwarding,
+  resetMailboxPassword,
+  setUpEmailDomain,
+  trekmailConfigured,
+} from "@/lib/trekmail";
 
 export interface FormState {
   error: string | null;
@@ -72,6 +83,11 @@ export async function startSetupAction(_prev: FormState, form: FormData): Promis
     await startSetup(dealer, actor);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Couldn't start the setup." };
+  }
+  // Their email domain goes into TrekMail at the same time (best effort: the
+  // Email section shows any problem and has its own button to try again).
+  if (dealer.webDomain && !dealer.trekmailDomainId && trekmailConfigured()) {
+    await setUpEmailDomain(dealer, actor).catch(() => {});
   }
   redirect(`/dealers/${dealer.id}`);
 }
@@ -152,4 +168,107 @@ export async function setModuleTierAction(form: FormData): Promise<void> {
 export async function setModuleEnabledAction(form: FormData): Promise<void> {
   const actor = await requireAdmin();
   backToModules(await setModuleEnabled(form.get("key"), form.get("enabled") === "true", actor));
+}
+
+// ---- Email (TrekMail) ----
+
+export interface EmailFormState {
+  error: string | null;
+  notice?: string;
+  address?: string;
+  /** Shown once, never stored. */
+  password?: string;
+}
+
+function emailError(err: unknown): EmailFormState {
+  return { error: err instanceof Error ? err.message : "Something went wrong with TrekMail." };
+}
+
+export async function setUpEmailAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    await setUpEmailDomain(dealer, actor, form.get("domain"));
+  } catch (err) {
+    return emailError(err);
+  }
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}?e=${Date.now()}#email`);
+}
+
+export async function recheckEmailDnsAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer?.trekmailDomainId) return;
+  await recheckDns(dealer.trekmailDomainId).catch(() => {});
+  // TrekMail queues the check; give it a moment before the page reads the result.
+  await new Promise((r) => setTimeout(r, 4000));
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}?e=${Date.now()}#email`);
+}
+
+export async function addMailboxAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    if (form.get("how") === "invite") {
+      const address = await inviteMailbox(dealer, actor, form.get("local"), form.get("recipient"));
+      revalidatePath(`/dealers/${dealer.id}`);
+      return { error: null, notice: `Invitation for ${address} sent to ${String(form.get("recipient")).trim()}. The mailbox appears here once they accept it.` };
+    }
+    const r = await createMailbox(dealer, actor, form.get("local"), form.get("name"));
+    revalidatePath(`/dealers/${dealer.id}`);
+    return { error: null, address: r.address, password: r.password };
+  } catch (err) {
+    return emailError(err);
+  }
+}
+
+export async function resetMailboxPasswordAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    const r = await resetMailboxPassword(dealer, actor, Number(form.get("mailboxId")));
+    return { error: null, address: r.address, password: r.password };
+  } catch (err) {
+    return emailError(err);
+  }
+}
+
+export async function deleteMailboxAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    await deleteMailbox(dealer, actor, Number(form.get("mailboxId")));
+  } catch (err) {
+    return emailError(err);
+  }
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}?e=${Date.now()}#email`);
+}
+
+export async function addForwardingAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    await addForwarding(dealer, actor, form.get("local"), form.get("recipients"));
+  } catch (err) {
+    return emailError(err);
+  }
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}?e=${Date.now()}#email`);
+}
+
+export async function removeForwardingAction(form: FormData): Promise<void> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return;
+  await removeForwarding(dealer, actor, Number(form.get("forwardingId"))).catch(() => {});
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}?e=${Date.now()}#email`);
 }
