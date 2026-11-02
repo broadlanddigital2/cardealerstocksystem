@@ -1,0 +1,92 @@
+name: Remove dealer
+
+# Removing a dealer, started from the console (or by the daily run below):
+#   export  make the dealer's data download (after "Remove dealer")
+#   delete  permanently delete the dealer's site, web addresses, files, database,
+#           email (if chosen) and export ("Delete now", or 30 days after removal)
+#   due     daily: delete every dealer whose 30 days are up
+# Progress shows on the dealer's page in the console.
+#
+# Repository secrets: CONSOLE_DATABASE_URL, CONSOLE_DEV_DATABASE_URL, NEON_API_KEY,
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, TREKMAIL_API_TOKEN
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [export, delete, due]
+        default: due
+      dealer_id:
+        description: "Dealer id (export / delete)"
+        required: false
+      run_id:
+        description: "Run id (set by the console)"
+        required: false
+      console:
+        description: "Which console"
+        type: choice
+        options: [live, dev]
+        default: live
+  schedule:
+    - cron: "17 3 * * *" # daily, 03:17 UTC
+
+concurrency:
+  group: remove-dealer-${{ inputs.console || 'scheduled' }}-${{ inputs.dealer_id || 'due' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  remove:
+    name: ${{ github.event_name == 'schedule' && format('Daily removal check ({0})', matrix.console) || format('{0} dealer {1} ({2} console)', inputs.mode, inputs.dealer_id, inputs.console) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        console: ${{ github.event_name == 'schedule' && fromJSON('["live","dev"]') || fromJSON(format('["{0}"]', inputs.console)) }}
+    env:
+      MODE: ${{ github.event_name == 'schedule' && 'due' || inputs.mode }}
+      DEALER_ID: ${{ inputs.dealer_id }}
+      RUN_ID: ${{ inputs.run_id }}
+      CONSOLE_TARGET: ${{ matrix.console }}
+      DEV_DB: ${{ secrets.CONSOLE_DEV_DATABASE_URL }}
+      LIVE_DB: ${{ secrets.CONSOLE_DATABASE_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TREKMAIL_API_TOKEN: ${{ secrets.TREKMAIL_API_TOKEN }}
+      PLATFORM_DOMAIN: racecargraphics.uk
+      DEALER_PREFIX: ${{ matrix.console == 'dev' && 'dev-' || '' }}
+    steps:
+      - name: Pick console database
+        id: t
+        run: |
+          if [ "$CONSOLE_TARGET" = "dev" ]; then db="$DEV_DB"; else db="$LIVE_DB"; fi
+          [ -n "$db" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$db"
+          echo "CONSOLE_DATABASE_URL=$db" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        if: steps.t.outputs.ready == 'true'
+        with:
+          ref: ${{ matrix.console == 'dev' && 'develop' || 'main' }}
+      - name: Removal support in this version?
+        id: has
+        if: steps.t.outputs.ready == 'true'
+        run: |
+          if [ -f apps/console/scripts/offboard.mjs ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice title=Skipped::This version doesn't include dealer removal yet."; fi
+      - uses: pnpm/action-setup@v4
+        if: steps.has.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.has.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.has.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Remove
+        if: steps.has.outputs.ok == 'true'
+        run: .github/scripts/step.sh "Dealer removal" node apps/console/scripts/offboard.mjs
