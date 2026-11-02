@@ -26,6 +26,7 @@ const ACTIONS: Record<string, string> = {
   "module.tier": "Module tier changed (all dealers)",
   "email.domain_added": "Email domain set up",
   "email.dns_applied": "Email DNS records added in Cloudflare",
+  "dns.instructions_sent": "DNS instructions emailed",
   "domain.dns_applied": "Web address DNS record added in Cloudflare",
   "email.mailbox_invited": "Mailbox invitation sent",
   "email.mailbox_created": "Mailbox created",
@@ -42,7 +43,7 @@ export default async function DealerPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; push?: string }>;
+  searchParams: Promise<{ saved?: string; push?: string; watch?: string; until?: string; cf?: string }>;
 }) {
   const admin = await requireAdmin();
   const id = Number((await params).id);
@@ -50,6 +51,9 @@ export default async function DealerPage({
   if (!dealer) notFound();
   const sp = await searchParams;
   const saved = sp.saved === "1";
+  // Set after "Add these records in Cloudflare": that section watches its DNS checks live.
+  const until = Number(sp.until);
+  const watch = Number.isFinite(until) && until > 0 ? { until, notice: sp.cf ?? null } : null;
   const steps = await latestSteps(dealer.id);
   const catalogue = await getCatalogue();
   let domains = dealer.status === "active" ? await listDomains(dealer.id) : [];
@@ -140,9 +144,14 @@ export default async function DealerPage({
         </section>
       )}
 
-      {dealer.status === "active" && <DomainsPanel dealerId={dealer.id} domains={domains} />}
+      {dealer.status === "active" && <DomainsPanel
+          dealerId={dealer.id}
+          domains={domains}
+          contactEmail={dealer.contactEmail ?? dealer.firstAdminEmail}
+          watch={sp.watch === "web" ? watch : null}
+        />}
 
-      <EmailPanel dealer={dealer} />
+      <EmailPanel dealer={dealer} watch={sp.watch === "email" ? watch : null} />
 
       <DealerForm
         action={updateDealerAction}
