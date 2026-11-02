@@ -14,7 +14,9 @@ import {
   type TmForwarding,
   type TmMailbox,
 } from "@/lib/trekmail";
-import { recheckEmailDnsAction, removeForwardingAction } from "../../app/actions";
+import { applyEmailDnsAction, recheckEmailDnsAction, removeForwardingAction } from "../../app/actions";
+import { canEditZone, findZone } from "@/lib/cloudflare-dns";
+import { ApplyDnsButton } from "./ApplyDnsButton";
 import { CheckButton } from "./CheckButton";
 import { CopyButton } from "./CopyButton";
 import { AddForwardingForm, AddMailboxForm, MailboxActions, SetUpEmailForm } from "./EmailForms";
@@ -80,6 +82,8 @@ export async function EmailPanel({ dealer }: { dealer: Dealer }) {
     problem = err instanceof Error ? err.message : "Couldn't reach TrekMail.";
   }
   const name = dealer.emailDomain ?? domain?.domain ?? suggested;
+  const zone = name ? await findZone(name) : null;
+  const zoneEditable = zone ? await canEditZone(zone.id) : false;
   const active = domain?.status === "active";
   const failing = checks.filter((c) => c.status === "fail" && c.check_key !== "smtp_alias");
 
@@ -107,10 +111,28 @@ export async function EmailPanel({ dealer }: { dealer: Dealer }) {
             {failing.length > 0 ? ` (${failing.length} still to add or fix)` : " (all in place)"}
           </summary>
           <div className="space-y-3 border-t border-slate-200 p-4">
-            <p className="text-xs text-slate-500">
-              Add these where {name}&apos;s DNS is managed (their domain provider). Replace any existing MX records and any
-              existing SPF record (the TXT starting v=spf1) rather than adding a second one.
-            </p>
+            {zoneEditable ? (
+              <div className="rounded-md bg-orange-50 p-3">
+                <p className="mb-2 text-xs text-orange-900">
+                  {name}&apos;s DNS is in your Cloudflare account ({zone!.name}), so the console can add these for you.
+                </p>
+                <ApplyDnsButton
+                  action={applyEmailDnsAction}
+                  fields={{ id: dealer.id }}
+                  confirmText={`Add these records to ${zone!.name} in Cloudflare?\n\nIncoming mail for ${name} moves to TrekMail: any existing MX records and SPF/DKIM/DMARC records for it are replaced. Other records are left alone.`}
+                />
+              </div>
+            ) : zone ? (
+              <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-900">
+                {name} is in your Cloudflare account ({zone.name}), but the console&apos;s Cloudflare token can&apos;t edit it. Give the token
+                Zone → DNS → Edit for that zone (or all zones) and this can be done for you.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Add these where {name}&apos;s DNS is managed (their domain provider). Replace any existing MX records and any
+                existing SPF record (the TXT starting v=spf1) rather than adding a second one.
+              </p>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="text-left text-slate-500">

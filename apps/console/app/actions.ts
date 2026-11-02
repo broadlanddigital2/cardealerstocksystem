@@ -5,13 +5,16 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, normaliseEmail, requestCode, signOut, verifyCode } from "@/lib/auth";
 import { createDealer, getDealer, readDealerForm, slugTaken, updateDealer } from "@/lib/dealers";
 import { pushModules, startSetup } from "@/lib/setup";
-import { addDomain, checkDomain, listDomains, removeDomain } from "@/lib/domains";
+import { addDomain, checkDomain, cnameTarget, listDomains, removeDomain } from "@/lib/domains";
+import { applyRecords, canEditZone, describeResult, findZone } from "@/lib/cloudflare-dns";
+import { auditLogTable, getDb } from "@/db/client";
 import { startRelease } from "@/lib/releases";
 import { setModuleEnabled, setModuleTier } from "@/lib/catalogue";
 import {
   addForwarding,
   createMailbox,
   deleteMailbox,
+  getDnsRequirements,
   inviteMailbox,
   recheckDns,
   removeForwarding,
@@ -271,4 +274,44 @@ export async function removeForwardingAction(form: FormData): Promise<void> {
   await removeForwarding(dealer, actor, Number(form.get("forwardingId"))).catch(() => {});
   revalidatePath(`/dealers/${dealer.id}`);
   redirect(`/dealers/${dealer.id}?e=${Date.now()}#email`);
+}
+
+// ---- Automatic DNS in Cloudflare ----
+
+export async function applyEmailDnsAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer?.trekmailDomainId || !dealer.emailDomain) return { error: "Set up this dealer's email first." };
+  try {
+    const zone = await findZone(dealer.emailDomain);
+    if (!zone || !(await canEditZone(zone.id))) return { error: `${dealer.emailDomain} isn't in a Cloudflare zone the console can edit.` };
+    const { required_records } = await getDnsRequirements(dealer.trekmailDomainId);
+    const r = await applyRecords(zone.id, dealer.emailDomain, required_records);
+    await getDb().insert(auditLogTable).values({ actorEmail: actor, dealerId: dealer.id, action: "email.dns_applied", detail: { ...r } });
+    await recheckDns(dealer.trekmailDomainId).catch(() => {});
+    revalidatePath(`/dealers/${dealer.id}`);
+    return { error: null, notice: `${describeResult(r)} TrekMail is re-checking; use Check DNS in a minute or two.` };
+  } catch (err) {
+    return emailError(err);
+  }
+}
+
+export async function applyDomainDnsAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  const domain = (await listDomains(dealer.id)).find((d) => d.id === Number(form.get("domainId")));
+  if (!domain) return { error: "Unknown address." };
+  try {
+    const zone = await findZone(domain.hostname);
+    if (!zone || !(await canEditZone(zone.id))) return { error: `${domain.hostname} isn't in a Cloudflare zone the console can edit.` };
+    const wanted = domain.records.length ? domain.records : [{ type: "CNAME", name: domain.hostname, value: cnameTarget() }];
+    const r = await applyRecords(zone.id, zone.name, wanted);
+    await getDb().insert(auditLogTable).values({ actorEmail: actor, dealerId: dealer.id, action: "domain.dns_applied", detail: { hostname: domain.hostname, ...r } });
+    await checkDomain(domain).catch(() => {});
+    revalidatePath(`/dealers/${dealer.id}`);
+    return { error: null, notice: `${describeResult(r)} The address usually goes live within a few minutes.` };
+  } catch (err) {
+    return emailError(err);
+  }
 }
