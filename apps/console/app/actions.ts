@@ -8,6 +8,8 @@ import { pushModules, startSetup } from "@/lib/setup";
 import { addDomain, checkDomain, cnameTarget, listDomains, removeDomain } from "@/lib/domains";
 import { applyRecords, canEditZone, describeResult, findZone } from "@/lib/cloudflare-dns";
 import { auditLogTable, getDb } from "@/db/client";
+import { sendEmail } from "@/lib/email";
+import { instructionsFor } from "@/lib/dns-instructions-server";
 import { startRelease } from "@/lib/releases";
 import { setModuleEnabled, setModuleTier } from "@/lib/catalogue";
 import {
@@ -278,10 +280,18 @@ export async function removeForwardingAction(form: FormData): Promise<void> {
 
 // ---- Automatic DNS in Cloudflare ----
 
+/** Back to the dealer page, watching the DNS checks live for the next 10 minutes. */
+function watchRedirect(dealerId: number, what: "email" | "web", notice: string): never {
+  revalidatePath(`/dealers/${dealerId}`);
+  const until = Date.now() + 10 * 60_000;
+  redirect(`/dealers/${dealerId}?watch=${what}&until=${until}&cf=${encodeURIComponent(notice)}#${what === "email" ? "email" : "domains"}`);
+}
+
 export async function applyEmailDnsAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
   const actor = await requireAdmin();
   const dealer = await dealerFromForm(form);
   if (!dealer?.trekmailDomainId || !dealer.emailDomain) return { error: "Set up this dealer's email first." };
+  let notice = "";
   try {
     const zone = await findZone(dealer.emailDomain);
     if (!zone || !(await canEditZone(zone.id))) return { error: `${dealer.emailDomain} isn't in a Cloudflare zone the console can edit.` };
@@ -289,11 +299,11 @@ export async function applyEmailDnsAction(_prev: EmailFormState, form: FormData)
     const r = await applyRecords(zone.id, dealer.emailDomain, required_records);
     await getDb().insert(auditLogTable).values({ actorEmail: actor, dealerId: dealer.id, action: "email.dns_applied", detail: { ...r } });
     await recheckDns(dealer.trekmailDomainId).catch(() => {});
-    revalidatePath(`/dealers/${dealer.id}`);
-    return { error: null, notice: `${describeResult(r)} TrekMail is re-checking; use Check DNS in a minute or two.` };
+    notice = describeResult(r);
   } catch (err) {
     return emailError(err);
   }
+  watchRedirect(dealer.id, "email", notice);
 }
 
 export async function applyDomainDnsAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
@@ -302,6 +312,7 @@ export async function applyDomainDnsAction(_prev: EmailFormState, form: FormData
   if (!dealer) return { error: "Unknown dealer." };
   const domain = (await listDomains(dealer.id)).find((d) => d.id === Number(form.get("domainId")));
   if (!domain) return { error: "Unknown address." };
+  let notice = "";
   try {
     const zone = await findZone(domain.hostname);
     if (!zone || !(await canEditZone(zone.id))) return { error: `${domain.hostname} isn't in a Cloudflare zone the console can edit.` };
@@ -309,8 +320,43 @@ export async function applyDomainDnsAction(_prev: EmailFormState, form: FormData
     const r = await applyRecords(zone.id, zone.name, wanted);
     await getDb().insert(auditLogTable).values({ actorEmail: actor, dealerId: dealer.id, action: "domain.dns_applied", detail: { hostname: domain.hostname, ...r } });
     await checkDomain(domain).catch(() => {});
-    revalidatePath(`/dealers/${dealer.id}`);
-    return { error: null, notice: `${describeResult(r)} The address usually goes live within a few minutes.` };
+    notice = describeResult(r);
+  } catch (err) {
+    return emailError(err);
+  }
+  watchRedirect(dealer.id, "web", notice);
+}
+
+/** Called every 20 seconds by the live DNS watch: asks TrekMail to check the email records again. */
+export async function pollEmailDnsAction(dealerId: number): Promise<void> {
+  await requireAdmin();
+  const dealer = await getDealer(dealerId);
+  if (dealer?.trekmailDomainId) await recheckDns(dealer.trekmailDomainId).catch(() => {});
+}
+
+/** Called every 20 seconds by the live DNS watch: re-checks the dealer's waiting web addresses. */
+export async function pollDomainsAction(dealerId: number): Promise<void> {
+  await requireAdmin();
+  for (const d of await listDomains(dealerId)) if (d.status !== "active") await checkDomain(d).catch(() => {});
+}
+
+/** Emails the DNS instructions to the dealer (records are worked out again here, never taken from the form). */
+export async function sendDnsInstructionsAction(_prev: EmailFormState, form: FormData): Promise<EmailFormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  const to = String(form.get("to") ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { error: "Enter the email address to send them to." };
+  try {
+    const instructions = await instructionsFor(dealer, form.get("kind") === "web" ? Number(form.get("domainId")) : null);
+    await sendEmail(to, instructions.subject, instructions.text, instructions.html);
+    await getDb().insert(auditLogTable).values({
+      actorEmail: actor,
+      dealerId: dealer.id,
+      action: "dns.instructions_sent",
+      detail: { to, subject: instructions.subject },
+    });
+    return { error: null, notice: `Sent to ${to}.` };
   } catch (err) {
     return emailError(err);
   }

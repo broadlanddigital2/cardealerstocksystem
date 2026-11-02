@@ -14,7 +14,10 @@ import {
   type TmForwarding,
   type TmMailbox,
 } from "@/lib/trekmail";
-import { applyEmailDnsAction, recheckEmailDnsAction, removeForwardingAction } from "../../app/actions";
+import { applyEmailDnsAction, pollEmailDnsAction, recheckEmailDnsAction, removeForwardingAction } from "../../app/actions";
+import { buildInstructions } from "@/lib/dns-instructions";
+import { DnsInstructionsBox } from "./DnsInstructionsBox";
+import { LiveDnsWatch } from "./LiveDnsWatch";
 import { canEditZone, findZone } from "@/lib/cloudflare-dns";
 import { ApplyDnsButton } from "./ApplyDnsButton";
 import { CheckButton } from "./CheckButton";
@@ -39,7 +42,7 @@ function Badge({ ok, warn, children }: { ok: boolean; warn?: boolean; children: 
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
 }
 
-export async function EmailPanel({ dealer }: { dealer: Dealer }) {
+export async function EmailPanel({ dealer, watch }: { dealer: Dealer; watch?: { until: number; notice: string | null } | null }) {
   const suggested = emailDomainFor(dealer) ?? "";
   if (!trekmailConfigured()) {
     return (
@@ -86,6 +89,10 @@ export async function EmailPanel({ dealer }: { dealer: Dealer }) {
   const zoneEditable = zone ? await canEditZone(zone.id) : false;
   const active = domain?.status === "active";
   const failing = checks.filter((c) => c.status === "fail" && c.check_key !== "smtp_alias");
+  const allGood = active && checks.filter((c) => c.status === "fail" || c.status === "warn").every((c) => c.check_key === "smtp_alias");
+  const instructions = records.length
+    ? buildInstructions({ dealerName: dealer.name, domain: name, purpose: "email", records }).text
+    : "";
 
   return (
     <section id="email" className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
@@ -103,9 +110,10 @@ export async function EmailPanel({ dealer }: { dealer: Dealer }) {
         </form>
       </div>
       {problem && <p className="mt-2 text-sm text-red-600">{problem}</p>}
+      {watch && <LiveDnsWatch dealerId={dealer.id} until={watch.until} done={allGood} notice={watch.notice} poll={pollEmailDnsAction} />}
 
       {records.length > 0 && (
-        <details className="mt-4 rounded-lg border border-slate-200" open={!active || failing.length > 0}>
+        <details className="mt-4 rounded-lg border border-slate-200" open={Boolean(watch) || !active || failing.length > 0}>
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
             DNS records for {name}
             {failing.length > 0 ? ` (${failing.length} still to add or fix)` : " (all in place)"}
@@ -182,6 +190,12 @@ export async function EmailPanel({ dealer }: { dealer: Dealer }) {
                   ))}
               </ul>
             )}
+            <DnsInstructionsBox
+              dealerId={dealer.id}
+              kind="email"
+              text={instructions}
+              defaultTo={dealer.contactEmail ?? dealer.firstAdminEmail}
+            />
           </div>
         </details>
       )}

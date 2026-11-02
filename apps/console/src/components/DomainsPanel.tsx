@@ -3,13 +3,27 @@ import { cnameTarget } from "@/lib/domains";
 import { applyDomainDnsAction, checkDomainAction, checkDomainsAction, removeDomainAction } from "../../app/actions";
 import { canEditZone, findZone } from "@/lib/cloudflare-dns";
 import { ApplyDnsButton } from "./ApplyDnsButton";
+import { pollDomainsAction } from "../../app/actions";
+import { buildInstructions } from "@/lib/dns-instructions";
+import { DnsInstructionsBox } from "./DnsInstructionsBox";
+import { LiveDnsWatch } from "./LiveDnsWatch";
 import { CheckButton } from "./CheckButton";
 import { AddDomainForm } from "./AddDomainForm";
 import { CopyButton } from "./CopyButton";
 
 const KIND: Record<string, string> = { staff: "Staff", showroom: "Showroom" };
 
-export async function DomainsPanel({ dealerId, domains }: { dealerId: number; domains: DealerDomain[] }) {
+export async function DomainsPanel({
+  dealerId,
+  domains,
+  contactEmail,
+  watch,
+}: {
+  dealerId: number;
+  domains: DealerDomain[];
+  contactEmail: string;
+  watch?: { until: number; notice: string | null } | null;
+}) {
   // Addresses whose DNS is in our Cloudflare account can have their record added for them.
   const editable = new Map<number, string>();
   for (const d of domains) {
@@ -34,6 +48,15 @@ export async function DomainsPanel({ dealerId, domains }: { dealerId: number; do
         Use a subdomain like <span className="font-mono">www.</span> or <span className="font-mono">stock.</span>: most
         providers can&apos;t point the bare domain at another address.
       </p>
+      {watch && (
+        <LiveDnsWatch
+          dealerId={dealerId}
+          until={watch.until}
+          done={domains.every((d) => d.status === "active")}
+          notice={watch.notice}
+          poll={pollDomainsAction}
+        />
+      )}
 
       {domains.length > 0 && (
         <ul className="mt-4 space-y-4">
@@ -102,6 +125,25 @@ export async function DomainsPanel({ dealerId, domains }: { dealerId: number; do
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {d.status !== "active" && (
+                <div className="mt-2">
+                  <DnsInstructionsBox
+                    dealerId={dealerId}
+                    kind="web"
+                    domainId={d.id}
+                    defaultTo={contactEmail}
+                    text={
+                      buildInstructions({
+                        dealerName: "",
+                        domain: d.hostname.split(".").length > 2 ? d.hostname.split(".").slice(1).join(".") : d.hostname,
+                        purpose: "web",
+                        address: d.hostname,
+                        records: d.records.length ? d.records : [{ type: "CNAME", name: d.hostname, value: cnameTarget() }],
+                      }).text
+                    }
+                  />
                 </div>
               )}
               {d.message && <p className="mt-2 text-xs text-red-700">{d.message}</p>}
