@@ -30,7 +30,8 @@ const STATUS: Record<string, string> = {
   provisioning: "bg-amber-100 text-amber-800",
   active: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
-  suspended: "bg-slate-200 text-slate-600",
+  suspended: "bg-red-100 text-red-800",
+  deleted: "bg-slate-200 text-slate-500",
 };
 
 const LABEL: Record<string, string> = {
@@ -38,7 +39,8 @@ const LABEL: Record<string, string> = {
   provisioning: "Setting up",
   active: "Live",
   failed: "Setup failed",
-  suspended: "Suspended",
+  suspended: "Removed (closed)",
+  deleted: "Deleted",
 };
 
 export function StatusBadge({ status }: { status: string }) {

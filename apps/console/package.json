@@ -24,6 +24,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "aws4fetch": "^1.0.20",
     "@opennextjs/cloudflare": "1.20.9",
     "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "catalog:",

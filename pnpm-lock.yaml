@@ -132,6 +132,9 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.3.0(@types/react@19.3.0)
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.11
