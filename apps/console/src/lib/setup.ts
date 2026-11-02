@@ -24,9 +24,12 @@ export const SETUP_STEPS = [
 
 const PLATFORM_DOMAIN = () => process.env.PLATFORM_DOMAIN || "racecargraphics.uk";
 
-/** The address staff use: their own staff domain, or <slug>-stockbook.<platform domain>. */
+/** "dev-" in the dev console, so dev and live dealers never share a site, database or bucket. */
+export const dealerPrefix = () => (process.env.CONSOLE_TARGET === "dev" ? "dev-" : "");
+
+/** The address staff use: their own staff domain, or <prefix><slug>-stockbook.<platform domain>. */
 export function siteHost(d: Pick<Dealer, "slug" | "staffDomain">): string {
-  return d.staffDomain || `${d.slug}-stockbook.${PLATFORM_DOMAIN()}`;
+  return d.staffDomain || `${dealerPrefix()}${d.slug}-stockbook.${PLATFORM_DOMAIN()}`;
 }
 
 function randomSecret(): string {

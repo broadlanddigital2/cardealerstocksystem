@@ -45,6 +45,8 @@ jobs:
       SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
       EMAIL_FROM: noreply@racecargraphics.uk
       PLATFORM_DOMAIN: racecargraphics.uk
+      # Dealers made in the dev console get dev- names (sites, databases, buckets).
+      DEALER_PREFIX: ${{ inputs.console == 'dev' && 'dev-' || '' }}
       RELEASE: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4

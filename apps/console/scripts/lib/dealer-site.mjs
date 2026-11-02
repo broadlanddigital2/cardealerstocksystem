@@ -100,15 +100,23 @@ export async function migrateDatabase(databaseUrl) {
   );
 }
 
+/**
+ * "dev-" for dealers made in the dev console, "" for the live console, so the
+ * two consoles can never create (or overwrite) the same site, database or bucket.
+ */
+export const dealerPrefix = () => env("DEALER_PREFIX", false);
+
 export function dealerNames(dealer) {
   const platformDomain = env("PLATFORM_DOMAIN", false) || "racecargraphics.uk";
-  const host = dealer.staff_domain || `${dealer.slug}-stockbook.${platformDomain}`;
+  const id = `${dealerPrefix()}${dealer.slug}`;
+  const host = dealer.staff_domain || `${id}-stockbook.${platformDomain}`;
   return {
     platformDomain,
     host,
     siteUrl: `https://${host}`,
-    workerName: `stockbook-${dealer.slug}`,
-    bucketName: `stockbook-${dealer.slug}-files`,
+    neonProjectName: `stockbook-${id}`,
+    workerName: dealer.worker_name || `stockbook-${id}`,
+    bucketName: `stockbook-${id}-files`,
   };
 }
 
