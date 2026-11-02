@@ -53,7 +53,7 @@ try {
   const dealer = rows[0];
   if (!dealer) throw new Error(`Dealer ${dealerId} not found`);
   const slug = dealer.slug;
-  const { host, siteUrl, workerName, bucketName } = dealerNames(dealer);
+  const { host, siteUrl, workerName, bucketName, neonProjectName } = dealerNames(dealer);
   const platformSecret = dealer.platform_secret || randomBytes(32).toString("hex");
   let databaseUrl = "";
 
@@ -61,7 +61,7 @@ try {
     let projectId = dealer.neon_project_id;
     if (!projectId) {
       const created = await neon("POST", "/projects", {
-        project: { name: `stockbook-${slug}`, region_id: "aws-eu-west-2", pg_version: 17 },
+        project: { name: neonProjectName, region_id: "aws-eu-west-2", pg_version: 17 },
       });
       projectId = created.project.id;
       databaseUrl = created.connection_uris?.[0]?.connection_uri ?? "";

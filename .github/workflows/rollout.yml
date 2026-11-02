@@ -60,6 +60,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       EMAIL_FROM: noreply@racecargraphics.uk
       PLATFORM_DOMAIN: racecargraphics.uk
+      # Dealers made in the dev console get dev- names (sites, databases, buckets).
+      DEALER_PREFIX: ${{ inputs.target == 'dev' && 'dev-' || '' }}
       ROLLOUT_ID: ${{ inputs.rollout_id }}
       DEALER_ID: ${{ inputs.dealer_id }}
       FORCE: ${{ inputs.force }}
