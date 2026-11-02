@@ -32,7 +32,7 @@ export const dealersTable = pgTable("dealers", {
   /** Release (git commit) the dealer's site is running, and when it was updated. */
   release: text("release"),
   releasedAt: timestamp("released_at", { withTimezone: true }),
-  /** draft | provisioning | active | failed | suspended */
+  /** draft | provisioning | active | failed | suspended (removed, waiting to be deleted) | deleted */
   status: text("status").notNull().default("draft"),
   notes: text("notes"),
   /** Set by the setup job. */
@@ -42,6 +42,14 @@ export const dealersTable = pgTable("dealers", {
   /** Email hosting (TrekMail): the dealer's email domain and its TrekMail domain id. */
   emailDomain: text("email_domain"),
   trekmailDomainId: integer("trekmail_domain_id"),
+  /** Removal: when it was asked for, when everything is deleted, and whether email goes too. */
+  removalRequestedAt: timestamp("removal_requested_at", { withTimezone: true }),
+  deleteAfter: timestamp("delete_after", { withTimezone: true }),
+  removeEmail: boolean("remove_email").notNull().default(false),
+  /** The data export made on removal (keys in the EU exports bucket). */
+  exportKeys: jsonb("export_keys").$type<string[]>(),
+  exportReadyAt: timestamp("export_ready_at", { withTimezone: true }),
+  removedAt: timestamp("removed_at", { withTimezone: true }),
   /** Lets the console change this dealer's modules (Bearer token for /api/platform/modules). */
   platformSecret: text("platform_secret"),
   provisionedAt: timestamp("provisioned_at", { withTimezone: true }),

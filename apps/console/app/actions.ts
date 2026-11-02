@@ -11,6 +11,7 @@ import { auditLogTable, getDb } from "@/db/client";
 import { sendEmail } from "@/lib/email";
 import { instructionsFor } from "@/lib/dns-instructions-server";
 import { startRelease } from "@/lib/releases";
+import { confirmed, deleteNow, removeDealer, restoreDealer } from "@/lib/removal";
 import { setModuleEnabled, setModuleTier } from "@/lib/catalogue";
 import {
   addForwarding,
@@ -360,4 +361,48 @@ export async function sendDnsInstructionsAction(_prev: EmailFormState, form: For
   } catch (err) {
     return emailError(err);
   }
+}
+
+// ---- Removing a dealer ----
+
+export async function removeDealerAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  if (!confirmed(dealer, form.get("confirm"))) return { error: `Type ${dealer.slug} to confirm.` };
+  try {
+    await removeDealer(dealer, actor, form.get("removeEmail") === "on");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't remove the dealer." };
+  }
+  revalidatePath("/");
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}`);
+}
+
+export async function restoreDealerAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  try {
+    await restoreDealer(dealer, actor);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't undo the removal." };
+  }
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}`);
+}
+
+export async function deleteNowAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const actor = await requireAdmin();
+  const dealer = await dealerFromForm(form);
+  if (!dealer) return { error: "Unknown dealer." };
+  if (!confirmed(dealer, form.get("confirm"))) return { error: `Type ${dealer.slug} to confirm.` };
+  try {
+    await deleteNow(dealer, actor);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't start the deletion." };
+  }
+  revalidatePath(`/dealers/${dealer.id}`);
+  redirect(`/dealers/${dealer.id}`);
 }

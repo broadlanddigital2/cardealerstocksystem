@@ -92,6 +92,11 @@ jobs:
         env:
           DATABASE_URL: ${{ steps.t.outputs.db }}
         run: .github/scripts/step.sh "Console migrations" pnpm --filter @workspace/console run migrate
+      - name: Exports bucket (EU) for removed dealers' downloads
+        if: steps.t.outputs.ready == 'true'
+        working-directory: apps/console
+        run: |
+          out=$(pnpm exec wrangler r2 bucket create stockbook-exports --jurisdiction eu 2>&1) || echo "$out" | grep -qi "already exists" || { echo "$out"; exit 1; }
       - name: Build and deploy console
         if: steps.t.outputs.ready == 'true'
         run: .github/scripts/step.sh "Console deploy" pnpm --filter @workspace/console run ${{ steps.t.outputs.script }}

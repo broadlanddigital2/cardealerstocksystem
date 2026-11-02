@@ -4,7 +4,7 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import { auditLogTable, getDb, rolloutDealersTable, rolloutsTable, type Dealer, type Rollout } from "@/db/client";
 
-async function dispatch(workflow: string, ref: string, inputs: Record<string, string>): Promise<void> {
+export async function dispatch(workflow: string, ref: string, inputs: Record<string, string>): Promise<void> {
   const token = process.env.CONSOLE_GITHUB_TOKEN;
   const repo = process.env.GITHUB_REPO || "broadlanddigital2/cardealerstocksystem";
   if (!token) throw new Error("The console can't start GitHub jobs yet (CONSOLE_GITHUB_TOKEN isn't set).");

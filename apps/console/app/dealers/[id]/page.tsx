@@ -6,6 +6,8 @@ import { Shell, StatusBadge } from "@/components/Shell";
 import { DealerForm } from "@/components/DealerForm";
 import { updateDealerAction } from "../../actions";
 import { SetupButton } from "@/components/SetupButton";
+import { RemovalPanel } from "@/components/RemovalPanel";
+import { DELETE_STEPS, REMOVAL_STEPS } from "@/lib/removal";
 import { ReleaseButton } from "@/components/ReleaseButton";
 import { shortRelease } from "@/lib/releases";
 import { DomainsPanel } from "@/components/DomainsPanel";
@@ -27,6 +29,12 @@ const ACTIONS: Record<string, string> = {
   "email.domain_added": "Email domain set up",
   "email.dns_applied": "Email DNS records added in Cloudflare",
   "dns.instructions_sent": "DNS instructions emailed",
+  "dealer.removed": "Removed (site closed)",
+  "dealer.export_ready": "Data export ready",
+  "dealer.restored": "Removal undone (site reopened)",
+  "dealer.delete_started": "Deletion started",
+  "dealer.deleted": "Deleted",
+  "dealer.delete_failed": "Deletion failed",
   "domain.dns_applied": "Web address DNS record added in Cloudflare",
   "email.mailbox_invited": "Mailbox invitation sent",
   "email.mailbox_created": "Mailbox created",
@@ -66,6 +74,10 @@ export default async function DealerPage({
   const host = siteHost(dealer);
   const history = await dealerHistory(dealer.id);
   const s = (v: string | null) => v ?? "";
+  const STEP_LABELS = new Map<string, string>([...SETUP_STEPS, ...REMOVAL_STEPS, ...DELETE_STEPS].map((x) => [x.key, x.label]));
+  const removalRun = steps.some((st) => STEP_LABELS.has(st.step) && !SETUP_STEPS.some((x) => x.key === st.step));
+  const jobRunning = steps.some((st) => st.status === "pending" || st.status === "running") && !steps.some((st) => st.status === "failed");
+  const deleted = dealer.status === "deleted";
 
   return (
     <Shell admin={admin}>
@@ -76,15 +88,22 @@ export default async function DealerPage({
       </div>
       {saved && <p className="mb-6 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Saved.</p>}
 
-      {dealer.status === "provisioning" && <meta httpEquiv="refresh" content="5" />}
+      {(dealer.status === "provisioning" || (removalRun && jobRunning)) && <meta httpEquiv="refresh" content="5" />}
       {sp.push && (
         <p className="mb-6 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Saved, but the modules couldn&apos;t be sent to the dealer&apos;s site: {sp.push}
         </p>
       )}
       <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="font-semibold">Set up</h2>
-        {dealer.status === "active" && dealer.siteUrl ? (
+        <h2 className="font-semibold">{removalRun ? "Removal" : "Set up"}</h2>
+        {deleted ? (
+          <p className="mt-1 text-sm text-slate-600">
+            Deleted{dealer.removedAt && <> on {dealer.removedAt.toLocaleDateString("en-GB")}</>}. Their site, files, database
+            and personal details are gone; only this record that they existed is kept.
+          </p>
+        ) : dealer.status === "suspended" ? (
+          <p className="mt-1 text-sm text-slate-600">{jobRunning ? "Working. This page updates every few seconds." : "Their site is closed."}</p>
+        ) : dealer.status === "active" && dealer.siteUrl ? (
           <p className="mt-1 text-sm text-slate-600">
             Live at{" "}
             <a href={dealer.siteUrl} className="font-medium text-blue-700 hover:underline" target="_blank" rel="noreferrer">
@@ -104,7 +123,7 @@ export default async function DealerPage({
         {steps.length > 0 && (
           <ol className="mt-4 space-y-2 text-sm">
             {steps.map((st) => {
-              const label = SETUP_STEPS.find((x) => x.key === st.step)?.label ?? st.step;
+              const label = STEP_LABELS.get(st.step) ?? st.step;
               const icon = st.status === "done" ? "✓" : st.status === "failed" ? "✗" : st.status === "running" ? "…" : "○";
               const colour =
                 st.status === "done" ? "text-green-700" : st.status === "failed" ? "text-red-700" : st.status === "running" ? "text-amber-700" : "text-slate-400";
@@ -125,6 +144,8 @@ export default async function DealerPage({
           <SetupButton dealerId={dealer.id} label={dealer.status === "failed" ? "Try setup again" : "Set up this dealer"} />
         )}
       </section>
+
+      {dealer.status === "suspended" && <RemovalPanel dealer={dealer} jobRunning={jobRunning} />}
 
       {dealer.status === "active" && (
         <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
@@ -151,9 +172,9 @@ export default async function DealerPage({
           watch={sp.watch === "web" ? watch : null}
         />}
 
-      <EmailPanel dealer={dealer} watch={sp.watch === "email" ? watch : null} />
+      {!deleted && <EmailPanel dealer={dealer} watch={sp.watch === "email" ? watch : null} />}
 
-      <DealerForm
+      {!deleted && <DealerForm
         action={updateDealerAction}
         catalogue={catalogue}
         submitLabel="Save changes"
@@ -175,7 +196,11 @@ export default async function DealerPage({
           pilot: dealer.pilot,
           notes: s(dealer.notes),
         }}
-      />
+      />}
+
+      {!deleted && dealer.status !== "suspended" && dealer.status !== "provisioning" && (
+        <RemovalPanel dealer={dealer} jobRunning={jobRunning} />
+      )}
 
       <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="font-semibold">History</h2>
