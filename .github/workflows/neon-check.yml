@@ -27,6 +27,6 @@ jobs:
           done
       - name: Site health
         run: |
-          for u in https://cardealerstockbook.racecargraphics.uk https://dev-cardealerstockbook.racecargraphics.uk https://dev-test-dealer-stockbook.racecargraphics.uk https://dev-console-stockbook.racecargraphics.uk; do
-            r=$(curl -sS -m 20 -o /tmp/b -w '%{http_code}' "$u/api/healthz" 2>&1); printf '::notice title=%s::HTTP %s %s\n' "$u" "$r" "$(head -c 200 /tmp/b 2>/dev/null | tr '\n' ' ')"
+          for u in https://cardealerstockbook.racecargraphics.uk; do
+            r=$(curl -sS -m 20 -o /tmp/b -w '%{http_code}' "$u/api/showroom" 2>&1); printf '::notice title=%s::HTTP %s %s\n' "$u" "$r" "$(head -c 200 /tmp/b 2>/dev/null | tr '\n' ' ')"
           done
