@@ -59,6 +59,18 @@ try {
 
   await step("database", async () => {
     let projectId = dealer.neon_project_id;
+    let reused = false;
+    if (!projectId) {
+      // A database with this dealer's name already exists (e.g. the console's
+      // record was lost and the dealer re-added): link to it, never duplicate.
+      const { projects } = await neon("GET", `/projects?search=${encodeURIComponent(neonProjectName)}&limit=100`);
+      const existing = projects.find((p) => p.name === neonProjectName);
+      if (existing) {
+        projectId = existing.id;
+        reused = true;
+        await consoleDb.query("update dealers set neon_project_id = $2 where id = $1", [dealerId, projectId]);
+      }
+    }
     if (!projectId) {
       const created = await neon("POST", "/projects", {
         project: { name: neonProjectName, region_id: "aws-eu-west-2", pg_version: 17 },
@@ -68,7 +80,7 @@ try {
       await consoleDb.query("update dealers set neon_project_id = $2 where id = $1", [dealerId, projectId]);
     }
     if (!databaseUrl) databaseUrl = await neonDatabaseUrl(projectId);
-    return `Neon project ${projectId}`;
+    return reused ? `Existing Neon project ${projectId} (${neonProjectName}) linked` : `Neon project ${projectId}`;
   });
 
   await step("tables", async () => {
