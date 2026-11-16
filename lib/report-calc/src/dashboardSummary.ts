@@ -21,6 +21,7 @@ export type VehicleForSummary = {
   model: string;
   status: string;
   purchaseDate: string | null;
+  returnedFromVehicleId?: number | null;
   saleDate: string | null;
   purchasePrice: Money;
   auctionCostNoVat: Money | null;
@@ -28,6 +29,7 @@ export type VehicleForSummary = {
   purchaseVat: Money | null;
   saleVat: Money | null;
   salePrice: Money | null;
+  issuedAccounting?: { totalMargin: number; vatDue: number | null };
 };
 
 export type InvoiceForSummary = {
@@ -54,6 +56,7 @@ export function computeDashboardSummary(
   invoices: InvoiceForSummary[],
   now: Date,
   vatQuarter: string | null,
+  credits: Array<{ creditNumber: string; date: string; salePrice: number; margin: number; marginVat: number; standardVat: number }> = [],
 ) {
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const quarter = vatPeriodRange(now, vatQuarter);
@@ -104,7 +107,7 @@ export function computeDashboardSummary(
     }
     const purchaseVat =
       r.vatQualifying && r.purchaseVat != null ? Number(r.purchaseVat) : 0;
-    if (r.purchaseDate?.startsWith(monthPrefix)) {
+    if (r.returnedFromVehicleId == null && r.purchaseDate?.startsWith(monthPrefix)) {
       totalPurchasesThisMonth += totalPurchaseCost;
       purchaseVatThisMonth += purchaseVat;
       if (purchaseVat !== 0) {
@@ -117,7 +120,7 @@ export function computeDashboardSummary(
       }
     }
     if (
-      r.purchaseDate &&
+      r.returnedFromVehicleId == null && r.purchaseDate &&
       r.purchaseDate >= quarter.startStr &&
       r.purchaseDate < quarter.endExclusiveStr
     ) {
@@ -133,7 +136,9 @@ export function computeDashboardSummary(
     }
     if (r.status === "sold" && r.saleDate) {
       const salePrice = r.salePrice == null ? null : Number(r.salePrice);
-      const { margin, vatDue } = computeMargins(totalPurchaseCost, salePrice);
+      const { margin, vatDue } = r.issuedAccounting
+        ? { margin: r.issuedAccounting.totalMargin, vatDue: r.issuedAccounting.vatDue }
+        : computeMargins(totalPurchaseCost, salePrice);
       // VAT-qualifying vehicles are standard-rated, not on the margin scheme:
       // they charge separate output VAT (saleVat) and contribute no margin VAT.
       const marginVat = r.vatQualifying ? 0 : vatDue ?? 0;
@@ -222,6 +227,27 @@ export function computeDashboardSummary(
     }
   }
 
+  // Explicit credit postings reverse sales/output VAT only. They never undo
+  // purchase input VAT or move stock, even when dates span different periods.
+  for (const c of credits) {
+    const inMonth = c.date.startsWith(monthPrefix);
+    const inQuarter = c.date >= quarter.startStr && c.date < quarter.endExclusiveStr;
+    const vat = c.marginVat + c.standardVat;
+    if (inMonth) {
+      totalSalesThisMonth -= c.salePrice;
+      totalMarginThisMonth -= c.margin;
+      marginVatThisMonth -= c.marginVat;
+      standardVatThisMonth -= c.standardVat;
+      salesThisMonthDetail.push({ id: `credit-${c.creditNumber}`, label: `Full credit ${c.creditNumber}`, sublabel: ddmmyyyy(c.date), amount: -c.salePrice });
+      netMarginThisMonthDetail.push({ id: `credit-margin-${c.creditNumber}`, label: `Full credit ${c.creditNumber}`, sublabel: ddmmyyyy(c.date), amount: -(c.margin - c.marginVat) });
+      vatThisMonthDetail.push({ id: `credit-vat-${c.creditNumber}`, label: `Credit output VAT ${c.creditNumber}`, sublabel: ddmmyyyy(c.date), amount: -vat });
+    }
+    if (inQuarter) {
+      marginVatThisQuarter -= c.marginVat;
+      standardVatThisQuarter -= c.standardVat;
+      vatThisQuarterDetail.push({ id: `credit-vat-${c.creditNumber}`, label: `Credit output VAT ${c.creditNumber}`, sublabel: ddmmyyyy(c.date), amount: -vat });
+    }
+  }
   // The headline VAT figures combine margin-scheme VAT and standard output VAT,
   // less the input VAT reclaimable on VAT-qualifying purchases in the period.
   const vatDueThisMonth =

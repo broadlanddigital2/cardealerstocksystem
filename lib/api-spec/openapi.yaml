@@ -23,6 +23,139 @@ tags:
   - name: Storage
     description: Object storage upload and serving endpoints.
 paths:
+  /vehicles/{id}/accounting-review:
+    post:
+      operationId: approveLegacySaleReview
+      tags: [Vehicles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LegacySaleReviewInput' }
+      responses:
+        '200':
+          description: Original figures explicitly reviewed and retained
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancellationState' }
+        '400':
+          description: Invalid review
+        '403':
+          description: Admin required
+        '409':
+          description: Changed or incomplete figures
+  /vehicles/{id}/sale-history:
+    get:
+      operationId: getVehicleSaleHistory
+      tags: [vehicles]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        default:
+          description: Authentication, permission or request failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        "200":
+          description: Read-only linked sale history for administrators, including deleted stock
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VehicleSaleHistoryEvent' }
+  /accounting-history:
+    get:
+      operationId: listAccountingHistory
+      tags: [reports]
+      responses:
+        default:
+          description: Authentication, permission or request failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        "200":
+          description: Permanently retained credits and externally confirmed refunds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountingHistoryEntry'
+  /vehicles/{id}/cancellation:
+    get:
+      operationId: getCancellationState
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        default:
+          description: Authentication, permission or invalid vehicle identifier
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        "200":
+          description: Eligibility; legacy invoices require accounting review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationState'
+    post:
+      operationId: cancelIssuedSale
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleCancellationInput'
+      responses:
+        default:
+          description: Authentication, permission or invalid cancellation input
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        "200":
+          description: Approved full credit (or identical retry)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationState'
+        "409":
+          description: Reconciliation required or conflicting repeat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /credits/{id}/refunds:
+    post:
+      operationId: confirmSaleRefund
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleRefundInput' }
+      responses:
+        default:
+          description: Authentication, permission or invalid refund confirmation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        "200":
+          description: External payment confirmation recorded; no money transferred
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingHistoryEntry' }
+        "409":
+          description: Duplicate or excessive refund
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /healthz:
     get:
       operationId: healthCheck
@@ -218,6 +351,12 @@ paths:
             schema:
               $ref: "#/components/schemas/VehicleUpdate"
       responses:
+        "409":
+          description: The vehicle or invoice changed since the edit snapshot; refresh and review before retrying.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "200":
           description: Updated vehicle
           content:
@@ -260,7 +399,8 @@ paths:
     post:
       operationId: recordSale
       tags: [vehicles]
-      summary: Record a sale against a vehicle
+      summary: Atomically record a sale, linked part exchange and invoice
+      description: Allocates the final salesInvoiceNumber under a dealer-scoped transaction lock; client number hints are ignored. An unchanged retry returns the saved vehicle without additional writes. A changed request for a sold vehicle conflicts; use sale editing or historical invoice recovery instead.
       parameters:
         - name: id
           in: path
@@ -275,11 +415,17 @@ paths:
               $ref: "#/components/schemas/SaleInput"
       responses:
         "200":
-          description: Vehicle marked as sold
+          description: Sale and invoice committed together, or an unchanged retry confirmed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Vehicle"
+        "409":
+          description: Concurrent change or historical invoice-number conflict; refresh before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "400":
           description: Validation error
           content:
@@ -800,6 +946,7 @@ paths:
       operationId: getNextInvoiceNumber
       tags: [invoices]
       summary: Get the next auto-generated sales invoice number
+      description: Advisory preview only, not a reservation. Use the number returned by recordSale.
       responses:
         "200":
           description: Next invoice number
@@ -861,6 +1008,7 @@ paths:
       operationId: createVehicleInvoice
       tags: [invoices]
       summary: Create a sales invoice for a sold vehicle
+      description: Uses the sale's reserved number, ignoring client number hints. A retry returns the already issued invoice without modifying it.
       parameters:
         - name: id
           in: path
@@ -880,6 +1028,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Invoice"
+        "409":
+          description: Missing sale reservation or historical invoice-number conflict; refresh before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "400":
           description: Validation error
           content:
@@ -1347,6 +1501,7 @@ components:
 
     Vehicle:
       type: object
+      description: Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.
       required:
         - id
         - stockNumber
@@ -1363,6 +1518,32 @@ components:
         - createdAt
         - updatedAt
       properties:
+        editVersion:
+          type: string
+          description: Opaque vehicle and invoice snapshot version returned by the detail GET.
+        accountingEntryType:
+          type: string
+          enum: [sale, credit]
+        accountingArchived:
+          type: boolean
+          description: Original stock was deleted; the accounting posting remains retained.
+        originalInvoiceNumber:
+          type: ["string", "null"]
+        accountingExtras:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountingExtra"
+        accountingSettings:
+          type: object
+          properties:
+            vatRate: { type: ["string", "null"] }
+            vatQualifyingCode: { type: ["string", "null"] }
+            carSalesCode: { type: ["string", "null"] }
+            carPurchasesCode: { type: ["string", "null"] }
+            stockCode: { type: ["string", "null"] }
+            otherSalesCode: { type: ["string", "null"] }
+        editInvoice:
+          $ref: "#/components/schemas/Invoice"
         id:
           type: integer
         stockNumber:
@@ -1590,6 +1771,9 @@ components:
     VehicleUpdate:
       type: object
       properties:
+        expectedEditVersion:
+          type: string
+          description: Required when editing a recorded sale. Must match the detail GET snapshot.
         stockNumber:
           type: string
         registrationNumber:
@@ -1724,17 +1908,32 @@ components:
       type: object
       required:
         - saleDate
-        - salesInvoiceNumber
         - buyerName
         - buyerAddress
         - salePrice
       properties:
+        holdingDeposit:
+          type: number
+          minimum: 0
+          description: Must match the deposit currently held on the vehicle; omitted uses the stored deposit.
+        extras:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceExtra"
+        extrasOnFinanceInvoice:
+          type: boolean
+        financeCompanyName:
+          type: string
+        financeCompanyAddress:
+          type: string
+        financeCompanyEmail:
+          type: string
         saleDate:
           type: string
           minLength: 1
         salesInvoiceNumber:
           type: string
-          minLength: 1
+          description: Deprecated client hint, ignored. The server reserves the number transactionally and returns it in Vehicle.salesInvoiceNumber.
         buyerName:
           type: string
           minLength: 1
@@ -2289,7 +2488,6 @@ components:
     InvoiceInput:
       type: object
       required:
-        - invoiceNumber
         - invoiceDate
         - customerName
         - customerAddress
@@ -2298,7 +2496,7 @@ components:
       properties:
         invoiceNumber:
           type: string
-          minLength: 1
+          description: Deprecated client hint, ignored. Uses the sale's reserved number and returns the final number in Invoice.invoiceNumber. Retrying an existing invoice returns that invoice.
         invoiceDate:
           type: string
           minLength: 1
@@ -2375,3 +2573,103 @@ components:
       properties:
         error:
           type: string
+    SaleCancellationInput:
+      type: object
+      required: [reason, cancellationDate, receivedAmount, reconciliation, receiptsConfirmed]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        cancellationDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        receivedAmount: { type: number, minimum: 0 }
+        reconciliation: { type: string, minLength: 1, maxLength: 4000 }
+        receiptsConfirmed: { type: boolean, enum: [true] }
+    AccountingExtra:
+      type: object
+      required: [description, amount]
+      properties:
+        description: { type: string }
+        amount: { type: number }
+        vat: { type: number }
+        onFinanceInvoice: { type: boolean }
+    LegacySaleReviewInput:
+      type: object
+      required: [expectedEditVersion, confirmed]
+      properties:
+        expectedEditVersion: { type: string, minLength: 1 }
+        documentReference: { type: string, minLength: 1, maxLength: 2000 }
+        notes: { type: string, minLength: 1, maxLength: 4000 }
+        refundReason: { type: string, minLength: 1, maxLength: 4000 }
+        confirmed: { type: boolean }
+    SaleRefundInput:
+      type: object
+      required: [amount, paymentDate, recipient, method, reference, requestKey, reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        amount: { type: number, exclusiveMinimum: 0 }
+        paymentDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        recipient: { type: string, minLength: 1, maxLength: 300 }
+        method: { type: string, minLength: 1, maxLength: 100 }
+        reference: { type: string, minLength: 1, maxLength: 300 }
+        requestKey: { type: string, minLength: 1, maxLength: 100 }
+    CancellationState:
+      type: object
+      required: [eligible, message, cancelled, gross, deposit]
+      properties:
+        reviewRequired: { type: boolean }
+        eligible: { type: boolean }
+        message: { type: string }
+        cancelled: { type: boolean }
+        gross: { type: number }
+        deposit: { type: number }
+        creditId: { type: integer }
+        creditNumber: { type: string }
+    VehicleSaleHistoryEvent:
+      type: object
+      required: [id, type, vehicleId, vehicleAvailable, stockLabel, date, recordedAt, documentNumber, reason]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [sale, credit, refund, returned_stock, correction, review] }
+        originalDocument: { type: string }
+        previousAmount: { type: number }
+        correctedAmount: { type: number }
+        vehicleId: { type: integer }
+        vehicleAvailable: { type: boolean }
+        stockLabel: { type: string }
+        date: { type: string }
+        recordedAt: { type: string }
+        documentNumber: { type: string }
+        reason: { type: string }
+        amount: { type: number }
+        actor: { type: string }
+        reference: { type: string }
+        method: { type: string }
+        recipient: { type: string }
+    AccountingHistoryEntry:
+      type: object
+      required: [id, type, vehicleId, registration, invoiceNumber, invoiceDate, creditNumber, creditDate, date, reason, actor, recordedAt, amount, net, vat, refundDue, refundState, recipient, reference, method, reconciliation, originalDocument]
+      properties:
+        canRefund: { type: boolean }
+        returnedVehicleId: { type: integer }
+        returnedVehicleAvailable: { type: boolean }
+        id: { type: string }
+        type: { type: string, enum: [credit, refund, deposit_refund, correction, review] }
+        vehicleId: { type: integer }
+        creditId: { type: integer }
+        registration: { type: string }
+        invoiceNumber: { type: string }
+        invoiceDate: { type: string }
+        creditNumber: { type: string }
+        creditDate: { type: string }
+        date: { type: string }
+        reason: { type: string }
+        actor: { type: string }
+        recordedAt: { type: string }
+        amount: { type: number }
+        net: { type: number }
+        vat: { type: number }
+        refundDue: { type: number }
+        refundState: { type: string }
+        recipient: { type: string }
+        reference: { type: string }
+        method: { type: string }
+        reconciliation: { type: string }
+        originalDocument: { type: string }

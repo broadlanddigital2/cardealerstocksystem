@@ -67,6 +67,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     // Website link also needs the public website switched on in Settings.
     ...(has("showroom") && settings?.showroomEnabled ? [{ name: "Website", href: `${basePath}/showroom`, icon: Globe, external: true }] : []),
     ...(has("reports") ? [{ name: "Reports", href: "/reports", icon: FileText }] : []),
+    // Cancelled invoices and refunds: admins only, with the Reports module.
+    ...(has("reports") && isAdmin ? [{ name: "Cancelled Invoices", href: "/cancelled-invoices", icon: FileText }] : []),
     ...(has("cash_sheet") ? [{ name: "Cash Sheet", href: "/cash-sheet", icon: Banknote }] : []),
     ...(has("contacts") ? [{ name: "Saved Contacts", href: "/saved-contacts", icon: Users }] : []),
     ...(has("csv_import") || has("cazoo_import") ? [{ name: "Import", href: "/import", icon: Download }] : []),

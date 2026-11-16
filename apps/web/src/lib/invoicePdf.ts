@@ -377,11 +377,11 @@ export async function generateInvoicePdf(
         ? [
             [
               {
-                content: "Balance Payable",
+                content: balancePayable < 0 ? "Balance Due to Customer" : "Balance Payable",
                 styles: { fontStyle: "bold" as const },
               },
               {
-                content: formatCurrency(balancePayable),
+                content: formatCurrency(Math.abs(balancePayable)),
                 styles: { fontStyle: "bold" as const },
               },
             ],
@@ -630,8 +630,8 @@ export async function generateVatVehicleInvoicePdf(
       ...(pxAllowance || holdingDeposit
         ? [
             [
-              { content: "Balance Payable", styles: boldRight },
-              { content: formatCurrency(balancePayable), styles: boldRight },
+              { content: balancePayable < 0 ? "Balance Due to Customer" : "Balance Payable", styles: boldRight },
+              { content: formatCurrency(Math.abs(balancePayable)), styles: boldRight },
             ],
           ]
         : []),

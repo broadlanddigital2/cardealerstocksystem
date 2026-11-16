@@ -120,6 +120,31 @@ export function serializeShowroomVehicle(row: VehicleRow) {
   };
 }
 
+export function calculateInvoiceBalance(row: {
+  salePrice: string | number;
+  saleVat?: string | number | null;
+  partExchangeAllowance?: string | number | null;
+  holdingDeposit?: string | number | null;
+  extras?: Array<{
+    amount: number;
+    vat?: number;
+    onFinanceInvoice?: boolean;
+  }> | null;
+  extrasOnFinanceInvoice?: boolean;
+}) {
+  // Per-item choices take precedence over the legacy invoice-level flag.
+  const extrasGross = (row.extras ?? [])
+    .filter((e) => e.onFinanceInvoice ?? row.extrasOnFinanceInvoice)
+    .reduce((sum, e) => sum + e.amount + (e.vat ?? 0), 0);
+  return round2(
+    Number(row.salePrice) +
+      Number(row.saleVat ?? 0) -
+      Number(row.partExchangeAllowance ?? 0) -
+      Number(row.holdingDeposit ?? 0) +
+      extrasGross,
+  );
+}
+
 export function serializeInvoice(row: {
   id: number;
   vehicleId: number;
@@ -146,12 +171,6 @@ export function serializeInvoice(row: {
   financeCompanyEmail: string | null;
   createdAt: Date;
 }) {
-  // Extras are billed per item: each may go on the finance/vehicle invoice or on
-  // a separate extras invoice. Legacy rows have no per-item flag, so fall back to
-  // the invoice-level extrasOnFinanceInvoice choice for those.
-  const extrasGross = (row.extras ?? [])
-    .filter((e) => e.onFinanceInvoice ?? row.extrasOnFinanceInvoice)
-    .reduce((sum, e) => sum + e.amount + (e.vat ?? 0), 0);
   return {
     id: row.id,
     vehicleId: row.vehicleId,
@@ -171,14 +190,7 @@ export function serializeInvoice(row: {
     // holding deposit. Extras are normally billed on a separate VAT invoice and
     // excluded here; only when extrasOnFinanceInvoice is set do the extras
     // (gross) get added so the finance invoice total reflects them.
-    balancePayable:
-      round2(
-        Number(row.salePrice) +
-          Number(row.saleVat ?? 0) -
-          Number(row.partExchangeAllowance ?? 0) -
-          Number(row.holdingDeposit ?? 0) +
-          extrasGross,
-      ),
+    balancePayable: calculateInvoiceBalance(row),
     holdingDeposit:
       row.holdingDeposit == null ? null : Number(row.holdingDeposit),
     extras: row.extras ?? null,

@@ -12,6 +12,8 @@ import type { VehicleUpdatePurchaseType } from './vehicleUpdatePurchaseType';
 import type { VehicleUpdateStatus } from './vehicleUpdateStatus';
 
 export interface VehicleUpdate {
+  /** Required when editing a recorded sale. Must match the detail GET snapshot. */
+  expectedEditVersion?: string;
   stockNumber?: string;
   /** @minLength 1 */
   registrationNumber?: string;

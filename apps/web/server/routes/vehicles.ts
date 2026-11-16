@@ -15,8 +15,14 @@ import {
   RecordHoldingDepositParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { serializeVehicle } from "../lib/vehicleSerializer";
+import { serializeVehicle, serializeInvoice } from "../lib/vehicleSerializer";
+import { vehicleEditVersion, staleVehicleMessage } from "../lib/vehicleEditVersion";
+import { invoiceValues, matchesSavedFields } from "../lib/invoiceValues";
+import { deleteVehicleWithArchive } from "../lib/deleteVehicle";
+import { snapshotIssuedSale, assertIssuedSaleNotEditable, isIssuedReceiptEdit, recordVehicleRevision } from "../lib/saleLedger";
+import { getSessionUserId } from "../middlewares/requireAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { lockInvoiceNumbers, nextInvoiceNumber, assertInvoiceNumberAvailable, InvoiceNumberConflict, invoiceNumberError } from "../lib/invoiceNumbers";
 
 const router = new Router();
 
@@ -160,6 +166,9 @@ async function syncPartExchangeVehicle(
   };
 
   if (existingPxVehicleId != null) {
+    // Editing a legacy parent sale must not rewrite a PX vehicle that has
+    // since acquired its own immutable issuance (possibly already credited).
+    await assertIssuedSaleNotEditable(tx, userId, existingPxVehicleId);
     await tx
       .update(vehiclesTable)
       .set(values)
@@ -503,17 +512,26 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [row] = await db
-    .select()
-    .from(vehiclesTable)
-    .where(
-      and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)),
-    );
-  if (!row) {
+  const snapshot = await db.transaction(async tx => {
+    await lockInvoiceNumbers(tx, userId);
+    const [row] = await tx.select().from(vehiclesTable).where(and(
+      eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId),
+    )).for("update");
+    if (!row) return null;
+    const [invoice] = await tx.select().from(invoicesTable).where(and(
+      eq(invoicesTable.vehicleId, row.id), eq(invoicesTable.userId, userId),
+    )).for("update");
+    return {
+      ...serializeVehicle(row, !!invoice),
+      editVersion: vehicleEditVersion(row, invoice),
+      ...(invoice ? { editInvoice: serializeInvoice(invoice) } : {}),
+    };
+  });
+  if (!snapshot) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
   }
-  res.json(serializeVehicle(row, await vehicleHasInvoice(userId, row.id)));
+  res.setHeader("Cache-Control", "no-store").json(snapshot);
 });
 
 router.patch("/vehicles/:id", async (req, res): Promise<void> => {
@@ -550,7 +568,7 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     "purchaseDate" in d && d.purchaseDate !== undefined
       ? d.purchaseDate
       : existing.purchaseDate;
-  const effSalesInvoice =
+  let effSalesInvoice =
     "salesInvoiceNumber" in d && d.salesInvoiceNumber !== undefined
       ? d.salesInvoiceNumber
       : existing.salesInvoiceNumber;
@@ -578,7 +596,6 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   if (effStatus === "sold") {
     const missing: string[] = [];
     if (!effSaleDate) missing.push("sale date");
-    if (!effSalesInvoice) missing.push("sales invoice number");
     if (!effBuyerName) missing.push("buyer name");
     if (!effBuyerAddress) missing.push("buyer address");
     if (!effSalePrice) missing.push("sale price");
@@ -833,6 +850,36 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   let row;
   try {
     row = await db.transaction(async (tx) => {
+      await lockInvoiceNumbers(tx, userId);
+      const [current] = await tx.select().from(vehiclesTable).where(and(
+        eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId),
+      )).for("update");
+      if (!current) throw new InvoiceNumberConflict(staleVehicleMessage);
+      const [currentInvoice] = await tx.select().from(invoicesTable).where(and(
+        eq(invoicesTable.vehicleId, current.id), eq(invoicesTable.userId, userId),
+      )).for("update");
+      // Effective values above were calculated from existing. Never commit
+      // them if the row changed while this request waited for the write lock.
+      if (vehicleEditVersion(existing, null) !== vehicleEditVersion(current, null) ||
+          ((current.status === "sold" || currentInvoice || d.expectedEditVersion != null) &&
+           d.expectedEditVersion !== vehicleEditVersion(current, currentInvoice))) {
+        throw new InvoiceNumberConflict(staleVehicleMessage);
+      }
+      if (await isIssuedReceiptEdit(tx, userId, current.id, { ...d, ...update })) {
+        const [receiptUpdated] = await tx.update(vehiclesTable).set({
+          ...update,
+        }).where(and(eq(vehiclesTable.id, current.id), eq(vehiclesTable.userId, userId))).returning();
+        await recordVehicleRevision(tx, current, currentInvoice, receiptUpdated, getSessionUserId(req)!);
+        return receiptUpdated;
+      }
+      if (current?.salesInvoiceNumber && effSalesInvoice !== current.salesInvoiceNumber)
+        throw new InvoiceNumberConflict("An assigned invoice number cannot be changed. Refresh this vehicle and try again.");
+      if (!current?.salesInvoiceNumber && (effStatus === "sold" || effSalesInvoice)) {
+        effSalesInvoice = await nextInvoiceNumber(tx, userId);
+        update.salesInvoiceNumber = effSalesInvoice;
+      }
+      if (effSalesInvoice)
+        await assertInvoiceNumberAvailable(tx, userId, params.data.id, effSalesInvoice);
       let [updated] = await tx
         .update(vehiclesTable)
         .set(update)
@@ -844,9 +891,19 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
         )
         .returning();
 
-      // Create/sync the stock record for any part-exchange vehicle, but only
-      // when sale details are being edited (not on unrelated vehicle edits).
-      if (saleFieldsTouched) {
+      // A status-only transition can use previously staged sale/PX details.
+      // It must create the linked stock in the same transaction too.
+      // An existing PX is independent stock. Contact/sale-price corrections on
+      // its parent must not rewrite it (or be blocked because it was sold).
+      // Compare effective values, since edit forms resend unchanged PX fields.
+      const pxChanged =
+        (effPxMake ?? null) !== (current.partExchangeMake ?? null) ||
+        (effPxModel ?? null) !== (current.partExchangeModel ?? null) ||
+        (effPxRegistration ?? null) !== (current.partExchangeRegistration ?? null) ||
+        (effPxMileage ?? null) !== (current.partExchangeMileage ?? null) ||
+        Number(effPxAllowance ?? 0) !== Number(current.partExchangeAllowance ?? 0);
+      if ((saleFieldsTouched && (current.partExchangeVehicleId == null || pxChanged)) ||
+          (effStatus === "sold" && current.status !== "sold")) {
         const pxVehicleId = await syncPartExchangeVehicle(
           tx,
           userId,
@@ -878,7 +935,9 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
         }
       }
 
-      if (saleFieldsTouched) {
+      // Always verify/create the invoice for a sold result, even when the
+      // request changes only status (or repairs a historical missing invoice).
+      if (saleFieldsTouched || effStatus === "sold") {
         const effPaymentMethod =
           "paymentMethod" in d && d.paymentMethod !== undefined
             ? d.paymentMethod
@@ -898,6 +957,7 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
         const [existingInvoice] = await tx
           .select({
             id: invoicesTable.id,
+            invoiceNumber: invoicesTable.invoiceNumber,
             extras: invoicesTable.extras,
             extrasOnFinanceInvoice: invoicesTable.extrasOnFinanceInvoice,
             financeCompanyName: invoicesTable.financeCompanyName,
@@ -968,6 +1028,8 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
         );
 
         if (existingInvoice) {
+          if (existingInvoice.invoiceNumber !== effSalesInvoice)
+            throw new InvoiceNumberConflict("The historical sale and invoice numbers do not match. Nothing was changed; ask staff to review these records.");
           const invoiceUpdate: Record<string, unknown> = {
             paymentMethod: effPaymentMethod ?? null,
             partExchangeAllowance: effPartExchange ?? null,
@@ -1015,7 +1077,7 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
           // invoice creation failed). Create it now so sale edits — including
           // extras and recomputed totals — are actually persisted instead of
           // silently updating zero rows.
-          await tx.insert(invoicesTable).values({
+          const [createdInvoice] = await tx.insert(invoicesTable).values({
             userId,
             vehicleId: params.data.id,
             invoiceNumber: effSalesInvoice,
@@ -1037,13 +1099,21 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
             financeCompanyName: effFinanceCompanyName,
             financeCompanyAddress: effFinanceCompanyAddress,
             financeCompanyEmail: effFinanceCompanyEmail,
-          });
+          }).returning();
+          // Only a genuinely new transition can certify issuance. Recovery of
+          // an already-sold legacy record must remain review-required.
+          if (current.status !== "sold" && !current.salesInvoiceNumber) {
+            await snapshotIssuedSale(tx, updated, createdInvoice, getSessionUserId(req)!);
+          }
         }
       }
 
+      await recordVehicleRevision(tx, current, currentInvoice, updated, getSessionUserId(req)!);
       return updated;
     });
   } catch (err) {
+    const message = invoiceNumberError(err);
+    if (message) { res.status(409).json({ error: message }); return; }
     if (mapVehicleDuplicateError(err, res)) return;
     throw err;
   }
@@ -1058,24 +1128,11 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [row] = await db
-    .delete(vehiclesTable)
-    .where(
-      and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)),
-    )
-    .returning();
-  if (!row) {
+  const deleted = await deleteVehicleWithArchive(userId, params.data.id);
+  if (!deleted) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
   }
-  await db
-    .delete(invoicesTable)
-    .where(
-      and(
-        eq(invoicesTable.userId, userId),
-        eq(invoicesTable.vehicleId, params.data.id),
-      ),
-    );
   res.sendStatus(204);
 });
 
@@ -1093,77 +1150,51 @@ router.post("/vehicles/:id/sale", async (req, res): Promise<void> => {
   }
   const d = parsed.data;
 
-  const [existing] = await db
-    .select()
-    .from(vehiclesTable)
-    .where(
-      and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)),
-    );
-  if (!existing) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
-
-  // Rule: a sale can only be recorded for a vehicle that is in stock or
-  // reserved (against a holding deposit) — never one already sold or disposed.
-  if (existing.status !== "in_stock" && existing.status !== "reserved") {
-    res.status(400).json({
-      error: `Cannot record a sale for a vehicle that is ${existing.status.replace("_", " ")}.`,
-    });
-    return;
-  }
-
-  if (d.saleDate < existing.purchaseDate) {
-    res.status(400).json({ error: "Sale date cannot be before purchase date." });
-    return;
-  }
-
-  const partExchangeAllowance =
-    d.partExchangeAllowance != null ? String(d.partExchangeAllowance) : null;
-
-  // Rule: part-exchange make, model and registration are compulsory when a
-  // part-exchange price is entered.
-  if (partExchangeAllowance != null && Number(partExchangeAllowance) > 0) {
-    const missingPx: string[] = [];
-    if (!d.partExchangeMake?.trim()) missingPx.push("make");
-    if (!d.partExchangeModel?.trim()) missingPx.push("model");
-    if (!d.partExchangeRegistration?.trim()) missingPx.push("registration");
-    if (missingPx.length > 0) {
-      res.status(400).json({
-        error: `Part-exchange ${missingPx.join(", ")} ${missingPx.length === 1 ? "is" : "are"} required when a part-exchange price is entered.`,
-      });
-      return;
-    }
-  }
-
   let row;
   try {
     row = await db.transaction(async (tx) => {
-      // Create the stock record for any part-exchange vehicle taken in.
-      const pxVehicleId = await syncPartExchangeVehicle(
-        tx,
-        userId,
-        existing.partExchangeVehicleId,
-        {
-          make: d.partExchangeMake,
-          model: d.partExchangeModel,
-          registration: d.partExchangeRegistration,
-          mileage: d.partExchangeMileage,
-          pricePaid: partExchangeAllowance,
-          purchaseDate: d.saleDate,
-          buyerName: d.buyerName,
-          buyerAddress: d.buyerAddress,
-          soldRegistration: existing.registrationNumber,
-          salesInvoiceNumber: d.salesInvoiceNumber,
-        },
-      );
+      // All number writers take the dealer lock before any vehicle row lock.
+      await lockInvoiceNumbers(tx, userId);
+      // Serialize sale attempts, including retries after a lost response.
+      const [existing] = await tx
+        .select()
+        .from(vehiclesTable)
+        .where(
+          and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)),
+        ).for("update");
+      if (!existing) {
+        res.status(404).json({ error: "Vehicle not found" });
+        return;
+      }
 
-      const [updated] = await tx
-        .update(vehiclesTable)
-        .set({
-          status: "sold",
+      if (d.saleDate < existing.purchaseDate) {
+        res.status(400).json({ error: "Sale date cannot be before purchase date." });
+        return;
+      }
+
+      const partExchangeAllowance =
+        d.partExchangeAllowance != null ? String(d.partExchangeAllowance) : null;
+
+      // PX identification is compulsory when a PX price is entered.
+      if (partExchangeAllowance != null && Number(partExchangeAllowance) > 0) {
+        const missingPx: string[] = [];
+        if (!d.partExchangeMake?.trim()) missingPx.push("make");
+        if (!d.partExchangeModel?.trim()) missingPx.push("model");
+        if (!d.partExchangeRegistration?.trim()) missingPx.push("registration");
+        if (missingPx.length > 0) {
+          res.status(400).json({
+            error: `Part-exchange ${missingPx.join(", ")} ${missingPx.length === 1 ? "is" : "are"} required when a part-exchange price is entered.`,
+          });
+          return;
+        }
+      }
+
+      const assignedNumber = existing.salesInvoiceNumber || await nextInvoiceNumber(tx, userId);
+      await assertInvoiceNumberAvailable(tx, userId, existing.id, assignedNumber);
+      const saleValues = {
+          status: "sold" as const,
           saleDate: d.saleDate,
-          salesInvoiceNumber: d.salesInvoiceNumber,
+          salesInvoiceNumber: assignedNumber,
           buyerName: d.buyerName,
           buyerAddress: d.buyerAddress,
           buyerEmail: d.buyerEmail ?? null,
@@ -1192,8 +1223,47 @@ router.post("/vehicles/:id/sale", async (req, res): Promise<void> => {
           partExchangeModel: d.partExchangeModel ?? null,
           partExchangeRegistration: d.partExchangeRegistration ?? null,
           partExchangeMileage: d.partExchangeMileage ?? null,
-          partExchangeVehicleId: pxVehicleId,
-        })
+      };
+      const heldDeposit = Number(existing.holdingDepositAmount ?? 0);
+      if (d.holdingDeposit != null && d.holdingDeposit !== heldDeposit) {
+        res.status(409).json({ error: "The holding deposit has changed. Refresh the vehicle before recording the sale." });
+        return;
+      }
+      const invoice = invoiceValues(userId, existing.id, {
+        ...d,
+        invoiceNumber: assignedNumber,
+        invoiceDate: d.saleDate,
+        customerName: d.buyerName,
+        customerAddress: d.buyerAddress,
+        saleVat: existing.vatQualifying ? d.saleVat : undefined,
+        holdingDeposit: heldDeposit > 0 ? heldDeposit : undefined,
+        notes: d.saleNotes,
+        balancePayable: 0, // derived by invoiceValues
+      });
+      if (existing.status === "sold") {
+        const [savedInvoice] = await tx.select().from(invoicesTable).where(and(
+          eq(invoicesTable.userId, userId), eq(invoicesTable.vehicleId, existing.id),
+          eq(invoicesTable.invoiceNumber, assignedNumber),
+        ));
+        if (savedInvoice && matchesSavedFields(existing, saleValues) && matchesSavedFields(savedInvoice, invoice)) {
+          return existing; // Exact retry: no second PX, sale, or invoice.
+        }
+        res.status(409).json({ error: "This vehicle is already sold. Review the saved sale and invoice before making changes." });
+        return;
+      }
+      if (existing.status !== "in_stock" && existing.status !== "reserved") {
+        res.status(400).json({ error: `Cannot record a sale for a vehicle that is ${existing.status.replace("_", " ")}.` });
+        return;
+      }
+      const pxVehicleId = await syncPartExchangeVehicle(tx, userId, existing.partExchangeVehicleId, {
+        make: d.partExchangeMake, model: d.partExchangeModel,
+        registration: d.partExchangeRegistration, mileage: d.partExchangeMileage,
+        pricePaid: partExchangeAllowance, purchaseDate: d.saleDate,
+        buyerName: d.buyerName, buyerAddress: d.buyerAddress,
+        soldRegistration: existing.registrationNumber, salesInvoiceNumber: assignedNumber,
+      });
+      const [updated] = await tx.update(vehiclesTable)
+        .set({ ...saleValues, partExchangeVehicleId: pxVehicleId })
         .where(
           and(
             eq(vehiclesTable.id, params.data.id),
@@ -1201,14 +1271,18 @@ router.post("/vehicles/:id/sale", async (req, res): Promise<void> => {
           ),
         )
         .returning();
+      const [issuedInvoice] = await tx.insert(invoicesTable).values(invoice).returning();
+      await snapshotIssuedSale(tx, updated, issuedInvoice, getSessionUserId(req)!);
       return updated;
     });
   } catch (err) {
+    const message = invoiceNumberError(err);
+    if (message) { res.status(409).json({ error: message }); return; }
     if (mapVehicleDuplicateError(err, res)) return;
     throw err;
   }
 
-  res.json(serializeVehicle(row, await vehicleHasInvoice(userId, row.id)));
+  if (row) res.json(serializeVehicle(row, true));
 });
 
 async function nextHoldingDepositReference(userId: string): Promise<string> {
@@ -1282,10 +1356,15 @@ router.post(
         and(
           eq(vehiclesTable.id, params.data.id),
           eq(vehiclesTable.userId, userId),
+          ne(vehiclesTable.status, "sold"),
         ),
       )
       .returning();
 
+    if (!updated) {
+      res.status(409).json({ error: "This vehicle has been sold. A deposit cannot change issued accounting. Refresh the vehicle." });
+      return;
+    }
     res.json(serializeVehicle(updated, await vehicleHasInvoice(userId, updated.id)));
   },
 );
@@ -1357,6 +1436,7 @@ router.post(
           buyerName: existing.buyerName,
           buyerAddress: existing.buyerAddress,
           refundDate: new Date().toISOString().split("T")[0],
+          actor: getSessionUserId(req),
         });
 
         return row;
