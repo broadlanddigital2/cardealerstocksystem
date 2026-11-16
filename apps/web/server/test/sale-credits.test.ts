@@ -21,6 +21,9 @@ vi.mock("@workspace/db", async (importOriginal) => {
 const auth = vi.hoisted(() => ({ tenant: "", admin: true }));
 vi.mock("../middlewares/requireAuth", () => ({
   getSessionUserId: () => "test-confirming-admin",
+  // Reports routes check the user's modules (role lookup): the test user is an admin.
+  getUserEmail: async () => "test-confirming-admin",
+  getEmailRole: async () => "admin",
   requireAuth: (req: Request, _res: Response, next: NextFunction) => { req.userId = auth.tenant; next(); },
   requireAdmin: (req: Request, res: Response, next: NextFunction) => {
     if (!auth.admin) { res.status(403).json({ error: "forbidden" }); return; }

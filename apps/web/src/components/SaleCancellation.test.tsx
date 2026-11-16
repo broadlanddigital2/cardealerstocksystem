@@ -34,11 +34,11 @@ describe("full sale cancellation controls", () => {
     render(<SaleCancellation vehicleId={7} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve full cancellation" }));
     fireEvent.change(screen.getByLabelText("Cancellation date"), { target: { value: "2025-10-15" } });
-    fireEvent.change(screen.getByLabelText("Reason (permanent)"), { target: { value: "Returned" } });
+    fireEvent.change(screen.getByLabelText("Reason for refund (permanent)"), { target: { value: "Returned" } });
     fireEvent.change(screen.getByLabelText("Total actually received, including deposit (£)"), { target: { value: "300" } });
     fireEvent.change(screen.getByLabelText(/Receipt reconciliation/), { target: { value: "100 deposit plus 200 bank, unpaid balance reconciled." } });
     fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.submit(screen.getByRole("button", { name: "Issue full credit" }).closest("form")!);
+    fireEvent.submit(screen.getByRole("button", { name: "Approve cancellation and continue to refund" }).closest("form")!);
     await waitFor(() => expect(mock.mutateAsync).toHaveBeenCalledWith({ id: 7, data: {
       cancellationDate: "2025-10-15", reason: "Returned", receivedAmount: 300,
       reconciliation: "100 deposit plus 200 bank, unpaid balance reconciled.", receiptsConfirmed: true,
@@ -51,7 +51,7 @@ describe("full sale cancellation controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve full cancellation" }));
     fireEvent.change(screen.getByLabelText("Total actually received, including deposit (£)"), { target: { value: "300" } });
     fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.submit(screen.getByRole("button", { name: "Issue full credit" }).closest("form")!);
+    fireEvent.submit(screen.getByRole("button", { name: "Approve cancellation and continue to refund" }).closest("form")!);
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Receipts discrepancy"));
     expect(mock.invalidateQueries).not.toHaveBeenCalled();
   });
