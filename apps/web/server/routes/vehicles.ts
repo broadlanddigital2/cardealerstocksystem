@@ -531,7 +531,7 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Vehicle not found" });
     return;
   }
-  res.set("Cache-Control", "no-store").json(snapshot);
+  res.setHeader("Cache-Control", "no-store").json(snapshot);
 });
 
 router.patch("/vehicles/:id", async (req, res): Promise<void> => {
