@@ -7,7 +7,7 @@ name: Release to dealers
 #   develop -> dealers in the dev console
 #   main    -> dealers in the live console
 #
-# Repository secrets: CONSOLE_DATABASE_URL, CONSOLE_DEV_DATABASE_URL, NEON_API_KEY,
+# Repository secrets: NEON_API_KEY (also used for the console database connection),
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 
 on:
@@ -53,8 +53,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      DEV_DB: ${{ secrets.CONSOLE_DEV_DATABASE_URL }}
-      LIVE_DB: ${{ secrets.CONSOLE_DATABASE_URL }}
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -69,10 +67,18 @@ jobs:
       GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       NEXT_TELEMETRY_DISABLED: 1
     steps:
+      - name: Fetch helper scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Database connection from Neon (no stored password)
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: node .github/scripts/neon-url.mjs stockbook-console ${{ inputs.target == 'dev' && 'dev' || 'production' }} ${{ inputs.target == 'dev' && '--create' || '' }} --env CONSOLE_DB
       - name: Pick target
         id: t
         run: |
-          if [ "${{ inputs.target }}" = "dev" ]; then db="$DEV_DB"; ref=develop; else db="$LIVE_DB"; ref=main; fi
+          if [ "${{ inputs.target }}" = "dev" ]; then ref=develop; else ref=main; fi; db="$CONSOLE_DB"
           echo "ref=${{ inputs.sha }}" >> "$GITHUB_OUTPUT"
           [ -n "${{ inputs.sha }}" ] || echo "ref=$ref" >> "$GITHUB_OUTPUT"
           [ -n "$db" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"

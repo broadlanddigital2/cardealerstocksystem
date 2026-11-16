@@ -8,7 +8,7 @@ name: Deploy console
 # dealer of that console (rollout.yml).
 #
 # Repository secrets:
-#   CONSOLE_DEV_DATABASE_URL / CONSOLE_DATABASE_URL   Neon project "stockbook-console" (dev / production branch)
+#   NEON_API_KEY        console database connection fetched from Neon project "stockbook-console" (dev / production branch)
 #   SENDGRID_API_KEY                                  for sign-in codes
 #   CONSOLE_GITHUB_TOKEN                              lets the Set up button start provision-dealer.yml
 #   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID      also given to the console for dealers' own addresses
@@ -53,23 +53,29 @@ jobs:
       SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
       CONSOLE_GITHUB_TOKEN: ${{ secrets.CONSOLE_GITHUB_TOKEN }}
       TREKMAIL_API_TOKEN: ${{ secrets.TREKMAIL_API_TOKEN }}
-      DEV_DB: ${{ secrets.CONSOLE_DEV_DATABASE_URL }}
-      LIVE_DB: ${{ secrets.CONSOLE_DATABASE_URL }}
       NEXT_TELEMETRY_DISABLED: 1
     steps:
+      - name: Fetch helper scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Database connection from Neon (no stored password)
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: node .github/scripts/neon-url.mjs stockbook-console ${{ env.IS_DEV == 'true' && 'dev' || 'production' }} ${{ env.IS_DEV == 'true' && '--create' || '' }} --env CONSOLE_DB
       - name: Pick target
         id: t
         run: |
           if [ "$IS_DEV" = "true" ]; then
             echo "target=dev" >> "$GITHUB_OUTPUT"
-            echo "db=$DEV_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy:dev" >> "$GITHUB_OUTPUT"; echo "envflag=--env dev" >> "$GITHUB_OUTPUT"
+            echo "db=$CONSOLE_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy:dev" >> "$GITHUB_OUTPUT"; echo "envflag=--env dev" >> "$GITHUB_OUTPUT"
             echo "ref=develop" >> "$GITHUB_OUTPUT"; echo "url=https://dev-console-stockbook.racecargraphics.uk" >> "$GITHUB_OUTPUT"
-            [ -n "$DEV_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
+            [ -n "$CONSOLE_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "target=live" >> "$GITHUB_OUTPUT"
-            echo "db=$LIVE_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy" >> "$GITHUB_OUTPUT"; echo "envflag=" >> "$GITHUB_OUTPUT"
+            echo "db=$CONSOLE_DB" >> "$GITHUB_OUTPUT"; echo "script=deploy" >> "$GITHUB_OUTPUT"; echo "envflag=" >> "$GITHUB_OUTPUT"
             echo "ref=main" >> "$GITHUB_OUTPUT"; echo "url=https://console-stockbook.racecargraphics.uk" >> "$GITHUB_OUTPUT"
-            [ -n "$LIVE_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
+            [ -n "$CONSOLE_DB" ] && echo "ready=true" >> "$GITHUB_OUTPUT" || echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Not configured yet
         if: steps.t.outputs.ready != 'true'

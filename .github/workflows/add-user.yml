@@ -1,8 +1,8 @@
 name: Add staff user
 
 # Run by hand (Actions -> "Add staff user" -> Run workflow) to let someone sign
-# in, or to change their role. Writes to the live (NEON_DATABASE_URL) or dev
-# (NEON_DEV_DATABASE_URL) database.
+# in, or to change their role. Writes to the live (production) or dev branch of
+# Neon project stockbook-demo (connection fetched with NEON_API_KEY).
 # Staff can also be invited from Settings -> Users once an admin is signed in.
 
 on:
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.site == 'dev' && 'development' || 'production' }}
     env:
-      DATABASE_URL: ${{ inputs.site == 'dev' && secrets.NEON_DEV_DATABASE_URL || secrets.NEON_DATABASE_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       EMAIL: ${{ inputs.email }}
       ROLE: ${{ inputs.role }}
     steps:
@@ -44,5 +44,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Database connection from Neon (project stockbook-demo)
+        run: node .github/scripts/neon-url.mjs stockbook-demo ${{ inputs.site == 'dev' && 'dev' || 'production' }} ${{ inputs.site == 'dev' && '--create' || '' }} --env DATABASE_URL
       - name: Add user
         run: .github/scripts/step.sh "Add staff user" node lib/db/scripts/add-user.mjs
