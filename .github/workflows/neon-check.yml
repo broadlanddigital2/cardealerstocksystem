@@ -1,0 +1,27 @@
+name: Neon check
+on:
+  push:
+    branches: [neon-check]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List Neon projects, branches and endpoints (no passwords)
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          DEV: ${{ secrets.NEON_DEV_DATABASE_URL }}
+          LIVE: ${{ secrets.NEON_DATABASE_URL }}
+          CDEV: ${{ secrets.CONSOLE_DEV_DATABASE_URL }}
+          CLIVE: ${{ secrets.CONSOLE_DATABASE_URL }}
+        run: |
+          note() { printf '::notice title=%s::%s\n' "$1" "$(echo "$2" | tr '\n' ' ' | cut -c1-1000)"; }
+          host() { echo "$1" | sed -E 's#^[a-z]+://[^@]*@([^/:?]+).*#\1#'; }
+          note secrets "NEON_DEV_DATABASE_URL(repo)=$(host "$DEV") | NEON_DATABASE_URL=$(host "$LIVE") | CONSOLE_DEV_DATABASE_URL=$(host "$CDEV") | CONSOLE_DATABASE_URL=$(host "$CLIVE")"
+          api() { curl -sS -H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json" "https://console.neon.tech/api/v2$1"; }
+          projects=$(api "/projects?limit=100")
+          echo "$projects" | jq -r '.projects[] | "\(.id) \(.name)"' | while read -r id name; do
+            branches=$(api "/projects/$id/branches" | jq -r '[.branches[] | "\(.name)\(if .default then "(default)" else "" end)"] | join(", ")')
+            eps=$(api "/projects/$id/endpoints" | jq -r '[.endpoints[] | "\(.host) [branch \(.branch_id)] \(.current_state)"] | join(" ; ")')
+            bmap=$(api "/projects/$id/branches" | jq -r '[.branches[] | "\(.id)=\(.name)"] | join(" ")')
+            note "$name" "branches: $branches || endpoints: $eps || ids: $bmap"
+          done
