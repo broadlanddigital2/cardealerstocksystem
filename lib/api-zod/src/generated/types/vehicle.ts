@@ -5,12 +5,29 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountingExtra } from './accountingExtra';
+import type { Invoice } from './invoice';
 import type { PaymentScheduleEntry } from './paymentScheduleEntry';
+import type { VehicleAccountingEntryType } from './vehicleAccountingEntryType';
+import type { VehicleAccountingSettings } from './vehicleAccountingSettings';
 import type { VehicleMethodOfDisposal } from './vehicleMethodOfDisposal';
 import type { VehiclePurchaseType } from './vehiclePurchaseType';
 import type { VehicleStatus } from './vehicleStatus';
 
+/**
+ * Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.
+ */
 export interface Vehicle {
+  /** Opaque vehicle and invoice snapshot version returned by the detail GET. */
+  editVersion?: string;
+  accountingEntryType?: VehicleAccountingEntryType;
+  /** Original stock was deleted; the accounting posting remains retained. */
+  accountingArchived?: boolean;
+  /** @nullable */
+  originalInvoiceNumber?: string | null;
+  accountingExtras?: AccountingExtra[];
+  accountingSettings?: VehicleAccountingSettings;
+  editInvoice?: Invoice;
   id: number;
   stockNumber: string;
   /** @nullable */

@@ -8,8 +8,8 @@
 import type { InvoiceExtra } from './invoiceExtra';
 
 export interface InvoiceInput {
-  /** @minLength 1 */
-  invoiceNumber: string;
+  /** Deprecated client hint, ignored. Uses the sale's reserved number and returns the final number in Invoice.invoiceNumber. Retrying an existing invoice returns that invoice. */
+  invoiceNumber?: string;
   /** @minLength 1 */
   invoiceDate: string;
   /** @minLength 1 */

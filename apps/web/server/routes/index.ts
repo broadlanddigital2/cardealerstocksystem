@@ -7,6 +7,8 @@ import dashboardRouter from "./dashboard";
 import settingsRouter from "./settings";
 import invoicesRouter from "./invoices";
 import reportsRouter from "./reports";
+import saleCreditsRouter from "./saleCredits";
+import legacySaleReviewRouter from "./legacySaleReview";
 import sellersRouter from "./sellers";
 import cashExpensesRouter from "./cashExpenses";
 import financeCompaniesRouter from "./financeCompanies";
@@ -20,6 +22,8 @@ import diagRouter from "./diag";
 import modulesRouter from "./modules";
 
 const router = new Router();
+router.use(saleCreditsRouter);
+router.use(legacySaleReviewRouter);
 
 router.use(healthRouter);
 router.use(accessRouter);

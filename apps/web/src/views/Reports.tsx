@@ -19,6 +19,8 @@ import {
   useGetSettings,
   useListInvoices,
   useListVehicles,
+  useListAccountingHistory,
+  getListAccountingHistoryQueryKey,
   getGetStockReportQueryKey,
   getGetPurchasesReportQueryKey,
   getGetSalesReportQueryKey,
@@ -305,6 +307,8 @@ export default function Reports() {
   );
 
   const { data: invoices, isLoading: loadingInvoices } = useListInvoices();
+  const history = useListAccountingHistory({ query: { queryKey: getListAccountingHistoryQueryKey(), refetchInterval: 30000 } });
+  const cancelledVehicleIds = new Set((history.data ?? []).filter(r => r.type === "credit").map(r => r.vehicleId));
   const { data: invoiceVehicles } = useListVehicles();
   const { data: settings } = useGetSettings();
 
@@ -313,8 +317,8 @@ export default function Reports() {
   // the margin-scheme figures rather than folded into the car's VAT Due.
   const salesRows = (salesReport ?? []).map((v) => {
     const inv = (invoices ?? []).find((i) => i.vehicleId === v.id);
-    const extrasNet = (inv?.extras ?? []).reduce((s, ex) => s + ex.amount, 0);
-    const extrasVat = (inv?.extras ?? []).reduce((s, ex) => s + (ex.vat ?? 0), 0);
+    const extrasNet = (v.accountingExtras ?? inv?.extras ?? []).reduce((s, ex) => s + ex.amount, 0);
+    const extrasVat = (v.accountingExtras ?? inv?.extras ?? []).reduce((s, ex) => s + (ex.vat ?? 0), 0);
     return { ...v, extrasNet, extrasVat };
   });
 
@@ -336,9 +340,9 @@ export default function Reports() {
   // Total invoiced = sale price + invoice extras (incl. their VAT).
   // Total paid = holding deposit + part-exchange allowance + payment schedule
   // (payments to the customer are subtracted). Mirrors the Payments tab.
-  const loadingOutstanding = loadingInvoices || !invoiceVehicles;
-  const outstandingRows = (invoiceVehicles ?? [])
-    .filter((v) => v.status === "sold" && v.salePrice != null)
+  const loadingOutstanding = loadingInvoices || !invoiceVehicles || history.isLoading;
+  const outstandingRows = (history.isLoading || history.error ? [] : invoiceVehicles ?? [])
+    .filter((v) => v.status === "sold" && v.salePrice != null && !cancelledVehicleIds.has(v.id))
     .filter((v) => {
       if (fromDate && (v.saleDate ?? "") < fromDate) return false;
       if (toDate && (v.saleDate ?? "") > toDate) return false;
@@ -583,7 +587,7 @@ export default function Reports() {
             <div className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Journal</CardTitle>
-                <CardDescription>Accounting journal postings. CSV downloads in Xero's Sales Invoice import format.</CardDescription>
+                <CardDescription>Accounting postings with dated full credits. Credits reverse sales/output VAT only, not purchase or stock entries. CSV uses invoice-format columns; credit rows require accountant review and the destination system's credit-note workflow, not automatic sales-invoice import.</CardDescription>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -822,7 +826,7 @@ export default function Reports() {
               } else if (activeTab === 'auction' && auctionTradeRows.length) {
                 exportPDF("Auction & Trade Report", [['Stock No', 'Reg', 'Make/Model', 'Purchased', 'Type', 'Purchase Price', 'Costs (No VAT)', 'Costs (inc VAT)', 'Total']], auctionTradeRows.map(v => [v.stockNumber, v.registrationNumber, `${v.make} ${v.model}`, formatDate(v.purchaseDate), purchaseTypeLabel(v.purchaseType), formatCurrency(v.purchasePrice), v.auctionCostNoVat != null ? formatCurrency(v.auctionCostNoVat) : "", v.auctionCostWithVat != null ? formatCurrency(v.auctionCostWithVat) : "", formatCurrency(auctionRowTotal(v))]));
               } else if (activeTab === 'sales' && salesReport) {
-                exportPDF("Sales Report", [['Stock No', 'Reg', 'Sale Date', 'Sale Price (Net)', 'Sale VAT', 'Margin', 'VAT Due', 'Extras', 'Extras VAT']], salesRows.map(v => [v.stockNumber, v.registrationNumber, formatDate(v.saleDate), v.salePrice?.toString(), v.vatQualifying ? (v.saleVat ?? 0).toFixed(2) : '-', v.margin?.toString(), v.vatDue?.toString(), v.extrasNet.toFixed(2), v.extrasVat.toFixed(2)]));
+                exportPDF("Sales Report", [['Type', 'Reference', 'Original', 'Stock No', 'Reg', 'Posting Date', 'Sale Price', 'Sale VAT', 'Margin', 'Margin VAT', 'Extras', 'Extras VAT']], salesRows.map(v => [v.accountingEntryType ?? 'sale', v.salesInvoiceNumber, v.originalInvoiceNumber, v.stockNumber, v.registrationNumber, formatDate(v.saleDate), v.salePrice?.toString(), v.vatQualifying ? (v.saleVat ?? 0).toFixed(2) : '-', v.margin?.toString(), v.vatDue?.toString(), v.extrasNet.toFixed(2), v.extrasVat.toFixed(2)]));
               } else if (activeTab === 'finance' && financeRows.length) {
                 exportPDF("Finance Report", [['Stock No', 'Reg', 'Make/Model', 'Sold', 'Buyer', 'Finance Company', 'Sale Price']], financeRows.map(v => [v.stockNumber, v.registrationNumber, `${v.make} ${v.model}`, formatDate(v.saleDate), v.buyerName, v.financeCompanyName ?? '', formatCurrency(v.salePrice)]));
               } else if (activeTab === 'deposits' && depositsReport) {
@@ -837,7 +841,15 @@ export default function Reports() {
               if (activeTab === 'stock' && stockReport) exportExcel("Stock Report", stockReport);
               if (activeTab === 'purchases' && purchasesReport) exportExcel("Purchases Report", filteredPurchases.map(v => ({ ...v, purchaseType: purchaseTypeLabel(v.purchaseType), purchasePrice: v.totalPurchaseCost })));
               if (activeTab === 'auction' && auctionTradeRows.length) exportExcel("Auction & Trade Report", auctionTradeRows.map(v => ({ stockNumber: v.stockNumber, registrationNumber: v.registrationNumber, makeModel: `${v.make} ${v.model}`, purchased: v.purchaseDate, type: purchaseTypeLabel(v.purchaseType), purchasePrice: v.purchasePrice, costsNoVat: v.auctionCostNoVat ?? "", costsIncVat: v.auctionCostWithVat ?? "", total: auctionRowTotal(v) })));
-              if (activeTab === 'sales' && salesReport) exportExcel("Sales Report", salesRows);
+              if (activeTab === 'sales' && salesReport) exportExcel("Sales Report", salesRows.map(v => ({
+                entryType: v.accountingEntryType ?? "sale", invoiceNumber: v.salesInvoiceNumber,
+                originalInvoiceNumber: v.originalInvoiceNumber, postingDate: v.saleDate,
+                stockNumber: v.stockNumber, registrationNumber: v.registrationNumber,
+                make: v.make, model: v.model, buyer: v.buyerName,
+                salePrice: v.salePrice, saleVat: v.vatQualifying ? v.saleVat ?? 0 : 0,
+                margin: v.margin, marginVat: v.vatDue, netMargin: v.netMargin,
+                extrasNet: v.extrasNet, extrasVat: v.extrasVat,
+              })));
               if (activeTab === 'finance' && financeRows.length) exportExcel("Finance Report", financeRows.map(v => ({ stockNumber: v.stockNumber, registrationNumber: v.registrationNumber, makeModel: `${v.make} ${v.model}`, sold: v.saleDate ?? "", buyer: v.buyerName, financeCompany: v.financeCompanyName ?? "", salePrice: v.salePrice ?? 0 })));
               if (activeTab === 'deposits' && depositsReport) exportExcel("Deposits Report", depositsReport.map(d => ({ date: d.date, type: d.type, stockNumber: d.stockNumber, registrationNumber: d.registrationNumber, makeModel: `${d.make} ${d.model}`, buyer: d.buyerName ?? "", amount: d.amount })));
               if (activeTab === 'outstanding' && outstandingRows.length) exportExcel("Outstanding Amounts Report", outstandingRows.map(r => ({ stockNumber: r.stockNumber, registrationNumber: r.registrationNumber, makeModel: `${r.make} ${r.model}`, sold: r.saleDate ?? "", customer: r.customerName, totalInvoiced: r.totalInvoiced, totalPaid: r.totalPaid, outstanding: r.outstanding })));
@@ -929,7 +941,7 @@ export default function Reports() {
                 {activeTab === "sales" && loadingSales && <TableRow><TableCell colSpan={10} className="text-center py-4">Loading...</TableCell></TableRow>}
                 {activeTab === "sales" && salesRows.map(v => (
                   <TableRow key={v.id}>
-                    <TableCell><Link href={`/vehicles/${v.id}`} className="hover:underline font-medium" style={{ color: "var(--ac-text)" }}><StockNumber value={v.stockNumber} /></Link></TableCell>
+                    <TableCell>{v.accountingArchived ? <><StockNumber value={v.stockNumber} /><div className="text-xs text-slate-500">Retained original — stock deleted</div></> : <Link href={v.accountingEntryType === "credit" ? "/cancelled-invoices" : `/vehicles/${v.id}`} className="hover:underline font-medium" style={{ color: "var(--ac-text)" }}><StockNumber value={v.stockNumber} /></Link>}<div className="text-xs">{v.accountingEntryType === "credit" ? `Credit ${v.salesInvoiceNumber} for ${v.originalInvoiceNumber}` : v.salesInvoiceNumber}</div></TableCell>
                     <TableCell>{v.registrationNumber}</TableCell>
                     <TableCell><div>{v.make}</div><div className="text-slate-500">{v.model}</div></TableCell>
                     <TableCell>{formatDate(v.saleDate)}</TableCell>
@@ -974,7 +986,8 @@ export default function Reports() {
                 )}
 
                 {activeTab === "outstanding" && loadingOutstanding && <TableRow><TableCell colSpan={8} className="text-center py-4">Loading...</TableCell></TableRow>}
-                {activeTab === "outstanding" && !loadingOutstanding && outstandingRows.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-4 text-slate-500">No outstanding balances. All recorded sales are fully paid.</TableCell></TableRow>}
+                {activeTab === "outstanding" && history.error && <TableRow><TableCell colSpan={8} className="text-center py-4 text-red-700">Cancellation history could not be verified. Outstanding balances are withheld; refresh and try again.</TableCell></TableRow>}
+                {activeTab === "outstanding" && !loadingOutstanding && !history.error && outstandingRows.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-4 text-slate-500">No outstanding balances on non-cancelled sales.</TableCell></TableRow>}
                 {activeTab === "outstanding" && outstandingRows.map(r => (
                   <TableRow key={r.id}>
                     <TableCell><Link href={`/vehicles/${r.id}`} className="hover:underline font-medium" style={{ color: "var(--ac-text)" }}><StockNumber value={r.stockNumber} /></Link></TableCell>

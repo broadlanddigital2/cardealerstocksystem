@@ -5,14 +5,25 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InvoiceExtra } from './invoiceExtra';
 import type { PaymentScheduleEntry } from './paymentScheduleEntry';
 import type { SaleInputMethodOfDisposal } from './saleInputMethodOfDisposal';
 
 export interface SaleInput {
+  /**
+     * Must match the deposit currently held on the vehicle; omitted uses the stored deposit.
+     * @minimum 0
+     */
+  holdingDeposit?: number;
+  extras?: InvoiceExtra[];
+  extrasOnFinanceInvoice?: boolean;
+  financeCompanyName?: string;
+  financeCompanyAddress?: string;
+  financeCompanyEmail?: string;
   /** @minLength 1 */
   saleDate: string;
-  /** @minLength 1 */
-  salesInvoiceNumber: string;
+  /** Deprecated client hint, ignored. The server reserves the number transactionally and returns it in Vehicle.salesInvoiceNumber. */
+  salesInvoiceNumber?: string;
   /** @minLength 1 */
   buyerName: string;
   /** @minLength 1 */

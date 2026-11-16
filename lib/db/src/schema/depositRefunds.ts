@@ -26,6 +26,7 @@ export const depositRefundsTable = pgTable(
     buyerName: text("buyer_name"),
     buyerAddress: text("buyer_address"),
     refundDate: text("refund_date").notNull(),
+    actor: text("actor"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

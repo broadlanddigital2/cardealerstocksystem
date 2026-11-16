@@ -62,6 +62,9 @@ export type SaleForJournal = {
   salesInvoiceNumber?: string | null;
   buyerName?: string | null;
   buyerAddress?: string | null;
+  accountingEntryType?: string;
+  accountingExtras?: InvoiceForJournal["extras"];
+  accountingSettings?: JournalSettings;
 };
 
 export type InvoiceForJournal = {
@@ -99,10 +102,11 @@ export function buildJournalRows(
   const incomeTax = (vatable: boolean) =>
     vatable ? "20% (VAT on Income)" : "No VAT";
   return sales.flatMap((v) => {
-    const vatRateLabel = settings?.vatRate ? `${settings.vatRate}%` : "";
+    const postingSettings = v.accountingSettings ?? settings;
+    const vatRateLabel = postingSettings?.vatRate ? `${postingSettings.vatRate}%` : "";
     const account = v.vatQualifying
-      ? (settings?.vatQualifyingCode ?? "")
-      : (settings?.carSalesCode ?? "");
+      ? (postingSettings?.vatQualifyingCode ?? "")
+      : (postingSettings?.carSalesCode ?? "");
     const price = v.salePrice ?? 0;
     // Fields shared by every line of this vehicle's invoice. Grouping lines by
     // ContactName + InvoiceNumber is what makes Xero treat them as one invoice.
@@ -133,7 +137,7 @@ export function buildJournalRows(
       description: `${v.make} ${v.model} (${v.registrationNumber})`,
       qty: 1,
       price: -purchaseCost,
-      account: settings?.carPurchasesCode ?? "",
+      account: postingSettings?.carPurchasesCode ?? "",
       taxRate: "No VAT",
       taxType: "No VAT",
       taxAmount: "",
@@ -146,25 +150,25 @@ export function buildJournalRows(
       description: `${v.make} ${v.model} (${v.registrationNumber})`,
       qty: 1,
       price: purchaseCost,
-      account: settings?.stockCode ?? "",
+      account: postingSettings?.stockCode ?? "",
       taxRate: "No VAT",
       taxType: "No VAT",
       taxAmount: "",
       amount: purchaseCost,
     };
     const inv = invoices.find((i) => i.vehicleId === v.id);
-    const extraLines: JournalLine[] = (inv?.extras ?? []).map((ex) => ({
+    const extraLines: JournalLine[] = (v.accountingExtras ?? inv?.extras ?? []).map((ex) => ({
       ...header,
       description: ex.description,
       qty: 1,
       price: ex.amount,
-      account: settings?.otherSalesCode ?? "",
-      taxRate: (ex.vat ?? 0) > 0 ? vatRateLabel : "Exempt Income",
-      taxType: incomeTax((ex.vat ?? 0) > 0),
-      taxAmount: (ex.vat ?? 0) > 0 ? (ex.vat as number) : "",
+      account: postingSettings?.otherSalesCode ?? "",
+      taxRate: (ex.vat ?? 0) !== 0 ? vatRateLabel : "Exempt Income",
+      taxType: incomeTax((ex.vat ?? 0) !== 0),
+      taxAmount: (ex.vat ?? 0) !== 0 ? (ex.vat as number) : "",
       amount: ex.amount,
     }));
-    return [carLine, purchaseLine, stockLine, ...extraLines];
+    return v.accountingEntryType === "credit" ? [carLine, ...extraLines] : [carLine, purchaseLine, stockLine, ...extraLines];
   });
 }
 

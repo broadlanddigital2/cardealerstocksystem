@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useAccess } from "@/components/app/access";
 import { 
   useGetVehicle, 
+  getVehicle,
   getGetVehicleQueryKey,
   getListVehiclesQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -12,12 +13,10 @@ import {
   useRecordSale,
   useRecordHoldingDeposit,
   useRefundHoldingDeposit,
-  useCreateVehicleInvoice,
   useGetVehicleInvoice,
   useGetSettings,
   useListSellers,
   useListFinanceCompanies,
-  getNextInvoiceNumber,
   getListInvoicesQueryKey,
   getGetVehicleInvoiceQueryKey,
   getGetStockReportQueryKey,
@@ -28,6 +27,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { deriveFinancePayment } from "@/lib/financePayment";
+import { partExchangeConfirmation } from "@/lib/partExchangeConfirmation";
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoicePdf, generateVatVehicleInvoicePdf, generateExtrasInvoicePdf, generateHoldingDepositPdf } from "@/lib/invoicePdf";
 import { computeInvoiceBalancePayable, selectFinanceInvoiceExtras, selectSeparateInvoiceExtras } from "@/lib/invoiceMath";
@@ -37,12 +37,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Trash2, Edit, FileText, PoundSterling, Loader2, Wallet } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import SaleCancellation from "@/components/SaleCancellation";
+import VehicleSaleHistory from "@/components/VehicleSaleHistory";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { VehiclePhotosUploader } from "@/components/VehiclePhotosUploader";
 import { mapRegistrationLookupToPartExchange, normalizeRegistration, RegistrationLookup } from "@/components/RegistrationLookup";
@@ -161,6 +163,8 @@ function PaymentSchedule({
 }
 
 export default function VehicleDetail({ id }: { id: string }) {
+  const { isAdmin } = useAccess();
+  const [saleRefundDialogOpen, setSaleRefundDialogOpen] = useState(false);
   const vehicleId = parseInt(id, 10);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -189,7 +193,7 @@ export default function VehicleDetail({ id }: { id: string }) {
     query: { enabled: !!vehicleId, queryKey: getGetVehicleQueryKey(vehicleId) }
   });
   const { data: settings } = useGetSettings();
-  const { data: vehicleInvoice, refetch: refetchVehicleInvoice } = useGetVehicleInvoice(vehicleId, {
+  const { data: vehicleInvoice, error: invoiceError } = useGetVehicleInvoice(vehicleId, {
     query: {
       enabled: !!vehicleId && vehicle?.status === "sold",
       queryKey: getGetVehicleInvoiceQueryKey(vehicleId),
@@ -235,7 +239,6 @@ export default function VehicleDetail({ id }: { id: string }) {
   const recordSale = useRecordSale();
   const recordHoldingDeposit = useRecordHoldingDeposit();
   const refundHoldingDeposit = useRefundHoldingDeposit();
-  const createInvoice = useCreateVehicleInvoice();
   const { data: sellers = [] } = useListSellers();
   const { data: financeCompanies = [] } = useListFinanceCompanies();
 
@@ -335,6 +338,10 @@ export default function VehicleDetail({ id }: { id: string }) {
     buyerAddress: "",
   });
   const [editSaleDialogOpen, setEditSaleDialogOpen] = useState(false);
+  const [saleEditVersion, setSaleEditVersion] = useState<string>();
+  const [detailsEditVersion, setDetailsEditVersion] = useState<string>();
+  const [paymentsEditVersion, setPaymentsEditVersion] = useState<string>();
+  const [saleEditConflict, setSaleEditConflict] = useState(false);
   const [isSavingSale, setIsSavingSale] = useState(false);
   const [editSaleData, setEditSaleData] = useState({
     saleDate: "",
@@ -396,6 +403,7 @@ export default function VehicleDetail({ id }: { id: string }) {
 
   const openEditDialog = () => {
     if (!vehicle) return;
+    setDetailsEditVersion(vehicle.editVersion);
     setEditData({
       registrationNumber: normalizeRegistration(vehicle.registrationNumber),
       make: vehicle.make,
@@ -445,6 +453,7 @@ export default function VehicleDetail({ id }: { id: string }) {
       await updateVehicle.mutateAsync({
         id: vehicleId,
         data: {
+          expectedEditVersion: detailsEditVersion,
           registrationNumber: editData.registrationNumber,
           make: editData.make,
           model: editData.model,
@@ -490,7 +499,7 @@ export default function VehicleDetail({ id }: { id: string }) {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this vehicle?")) return;
+    if (!confirm("Delete this vehicle from active stock? Invoice details will be archived and invoice numbers permanently reserved. This does not cancel or refund the sale.")) return;
     setIsDeleting(true);
     try {
       await deleteVehicle.mutateAsync({ id: vehicleId });
@@ -547,11 +556,24 @@ export default function VehicleDetail({ id }: { id: string }) {
         extras: cleanedExtras,
         extrasOnFinanceInvoice,
       });
+      const confirmation = partExchangeConfirmation({
+        salePrice: Number(saleData.salePrice),
+        saleVat: vehicle.vatQualifying ? Number(saleData.saleVat) || 0 : 0,
+        partExchangeAllowance: Number(saleData.partExchangeAllowance) || 0,
+        balancePayable,
+      });
+      if (confirmation && !window.confirm(confirmation)) return;
 
-      // 1. Record Sale
-      await recordSale.mutateAsync({
+      // Sale, PX stock and the full invoice commit together.
+      const savedSale = await recordSale.mutateAsync({
         id: vehicleId,
         data: {
+          holdingDeposit: heldDeposit,
+          extras: cleanedExtras.length ? cleanedExtras : undefined,
+          extrasOnFinanceInvoice: extrasOnFinanceInvoice || undefined,
+          financeCompanyName: isFinanceSale && saleData.financeCompanyName.trim() ? saleData.financeCompanyName.trim() : undefined,
+          financeCompanyAddress: isFinanceSale && saleData.financeCompanyAddress.trim() ? saleData.financeCompanyAddress.trim() : undefined,
+          financeCompanyEmail: isFinanceSale && saleData.financeCompanyEmail.trim() ? saleData.financeCompanyEmail.trim() : undefined,
           saleDate: saleData.saleDate,
           salesInvoiceNumber: saleData.salesInvoiceNumber,
           buyerName: saleData.buyerName,
@@ -571,30 +593,8 @@ export default function VehicleDetail({ id }: { id: string }) {
           methodOfDisposal: "retail_sale"
         }
       });
-      // 2. Generate Invoice Record
-      await createInvoice.mutateAsync({
-        id: vehicleId,
-        data: {
-          invoiceNumber: saleData.salesInvoiceNumber,
-          invoiceDate: saleData.saleDate,
-          customerName: saleData.buyerName,
-          customerAddress: saleData.buyerAddress,
-          salePrice: Number(saleData.salePrice),
-          saleVat: vehicle.vatQualifying && saleData.saleVat ? Number(saleData.saleVat) : undefined,
-          paymentMethod: saleData.paymentMethod || undefined,
-          partExchangeAllowance: saleData.partExchangeAllowance ? Number(saleData.partExchangeAllowance) : undefined,
-          holdingDeposit: heldDeposit > 0 ? heldDeposit : undefined,
-          extras: cleanedExtras.length ? cleanedExtras : undefined,
-          extrasOnFinanceInvoice: extrasOnFinanceInvoice || undefined,
-          balancePayable,
-          notes: saleData.saleNotes,
-          financeCompanyName: isFinanceSale && saleData.financeCompanyName.trim() ? saleData.financeCompanyName.trim() : undefined,
-          financeCompanyAddress: isFinanceSale && saleData.financeCompanyAddress.trim() ? saleData.financeCompanyAddress.trim() : undefined,
-          financeCompanyEmail: isFinanceSale && saleData.financeCompanyEmail.trim() ? saleData.financeCompanyEmail.trim() : undefined
-        }
-      });
       
-      toast({ title: "Sale recorded successfully" });
+      toast({ title: `Sale recorded — ${savedSale.salesInvoiceNumber}` });
       setSaleExtras([]);
       invalidateVehicleData();
       setSaleDialogOpen(false);
@@ -604,7 +604,11 @@ export default function VehicleDetail({ id }: { id: string }) {
         setRemovalDialogOpen(true);
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.error || "Failed to record sale" });
+      toast({
+        variant: "destructive",
+        title: "Sale could not be confirmed",
+        description: err?.data?.error ?? "Your details have been kept. Retry with the same details to safely confirm the sale and invoice, or refresh to check whether they were saved.",
+      });
     } finally {
       setIsSelling(false);
     }
@@ -756,19 +760,22 @@ export default function VehicleDetail({ id }: { id: string }) {
   };
 
   const openEditSaleDialog = async () => {
-    if (!vehicle) return;
-    // Always prefill extras from fresh invoice data. The invoice query may not
-    // have loaded yet right after recording a sale; opening with stale/empty
-    // extras would cause the save to wipe them.
-    let invoiceForPrefill = vehicleInvoice;
-    if (vehicle.status === "sold") {
-      try {
-        const { data } = await refetchVehicleInvoice();
-        if (data) invoiceForPrefill = data;
-      } catch {
-        // fall back to cached invoice data
+    // One locked snapshot pairs the form values with their version. Never fall
+    // back to cached data on failure, or pair a new version with an old draft.
+    let vehicle;
+    try {
+      vehicle = await getVehicle(vehicleId);
+      if (!vehicle.editVersion || (vehicle.status === "sold" && !vehicle.editInvoice)) {
+        throw new Error("The sale and invoice could not be loaded together. Please refresh and try again.");
       }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Cannot load sale details", description: err?.data?.error ?? err?.message });
+      return;
     }
+    const invoiceForPrefill = vehicle.editInvoice;
+    setSaleEditVersion(vehicle.editVersion);
+    setSaleEditConflict(false);
+    queryClient.setQueryData(getGetVehicleQueryKey(vehicleId), vehicle);
     const existingPayments: PaymentRow[] = (vehicle.payments ?? []).map(p => ({
       date: p.date ?? "",
       amount: p.amount != null ? String(p.amount) : "",
@@ -822,6 +829,7 @@ export default function VehicleDetail({ id }: { id: string }) {
 
   const handleEditSaleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saleEditConflict || !saleEditVersion) return;
     if (
       Number(editSaleData.partExchangeAllowance) > 0 &&
       (!editSaleData.partExchangeMake.trim() || !editSaleData.partExchangeModel.trim() || !editSaleData.partExchangeRegistration.trim())
@@ -833,7 +841,6 @@ export default function VehicleDetail({ id }: { id: string }) {
       });
       return;
     }
-    setIsSavingSale(true);
     const cleanedEditExtras = editSaleData.extras
       .filter(x => x.description.trim() && x.amount !== "" && Number.isFinite(Number(x.amount)))
       .map(x => {
@@ -850,10 +857,26 @@ export default function VehicleDetail({ id }: { id: string }) {
           onFinanceInvoice: editSaleData.financeCompanyName.trim() !== "" ? x.onFinanceInvoice : false,
         };
       });
+    const editConfirmation = partExchangeConfirmation({
+      salePrice: Number(editSaleData.salePrice),
+      saleVat: vehicle.vatQualifying ? Number(editSaleData.saleVat) || 0 : 0,
+      partExchangeAllowance: Number(editSaleData.partExchangeAllowance) || 0,
+      balancePayable: computeInvoiceBalancePayable({
+        salePrice: Number(editSaleData.salePrice),
+        saleVat: vehicle.vatQualifying ? Number(editSaleData.saleVat) || 0 : 0,
+        partExchangeAllowance: Number(editSaleData.partExchangeAllowance) || 0,
+        holdingDeposit: vehicle.holdingDepositAmount ?? 0,
+        extras: cleanedEditExtras,
+        extrasOnFinanceInvoice: cleanedEditExtras.some(e => e.onFinanceInvoice),
+      }),
+    });
+    if (editConfirmation && !window.confirm(editConfirmation)) return;
+    setIsSavingSale(true);
     try {
       await updateVehicle.mutateAsync({
         id: vehicleId,
         data: {
+          expectedEditVersion: saleEditVersion,
           saleDate: editSaleData.saleDate,
           salesInvoiceNumber: editSaleData.salesInvoiceNumber,
           buyerName: editSaleData.buyerName,
@@ -887,6 +910,7 @@ export default function VehicleDetail({ id }: { id: string }) {
       invalidateVehicleData();
       setEditSaleDialogOpen(false);
     } catch (err: any) {
+      if (err?.status === 409) setSaleEditConflict(true);
       toast({ variant: "destructive", title: "Error", description: err?.data?.error ?? err?.message ?? "Failed to update sale details" });
     } finally {
       setIsSavingSale(false);
@@ -895,6 +919,7 @@ export default function VehicleDetail({ id }: { id: string }) {
 
   const startEditingPayments = () => {
     if (!vehicle) return;
+    setPaymentsEditVersion(vehicle.editVersion);
     setPaymentsDraft(
       (vehicle.payments ?? []).map(p => ({
         date: p.date ?? "",
@@ -925,6 +950,7 @@ export default function VehicleDetail({ id }: { id: string }) {
       await updateVehicle.mutateAsync({
         id: vehicleId,
         data: {
+          expectedEditVersion: paymentsEditVersion,
           numberOfPayments: paymentsDraft.length || null,
           payments: paymentsDraft.length
             ? paymentsDraft.map(p => ({ date: p.date, amount: p.amount ? Number(p.amount) : 0, paymentMethod: p.paymentMethod || undefined, type: p.type || undefined }))
@@ -1035,6 +1061,15 @@ export default function VehicleDetail({ id }: { id: string }) {
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-6">
+      {vehicle.status === "sold" && (invoiceError as { status?: number } | null)?.status === 404 && (
+        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
+          <p className="font-medium">Sale recorded — invoice needs completing</p>
+          <p className="text-sm">Do not record this sale again. Review the saved sale details and save them to create the missing invoice. Add any extras or finance details that were not saved.</p>
+          <Button type="button" variant="outline" onClick={() => void openEditSaleDialog()}>
+            Review and complete invoice
+          </Button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/stock")}>
@@ -1121,11 +1156,6 @@ export default function VehicleDetail({ id }: { id: string }) {
                     buyerAddress: prev.buyerAddress || (vehicle.buyerAddress ?? ""),
                   }));
                 }
-                if (!saleData.salesInvoiceNumber) {
-                  getNextInvoiceNumber().then(({ invoiceNumber }) =>
-                    setSaleData(prev => prev.salesInvoiceNumber ? prev : { ...prev, salesInvoiceNumber: invoiceNumber })
-                  ).catch(() => {});
-                }
               }
             }}>
               <DialogTrigger asChild>
@@ -1164,7 +1194,7 @@ export default function VehicleDetail({ id }: { id: string }) {
                     </div>
                     <div className="space-y-2">
                       <Label>Invoice Number *</Label>
-                      <Input required readOnly value={saleData.salesInvoiceNumber} className="bg-muted" />
+                      <Input readOnly value="Assigned when sale is saved" className="bg-muted" />
                       <p className="text-xs text-muted-foreground">Auto-generated.</p>
                     </div>
                     <div className="space-y-2 col-span-2">
@@ -1370,6 +1400,7 @@ export default function VehicleDetail({ id }: { id: string }) {
           )}
           {vehicle.status === 'sold' && (
             <>
+              {isAdmin && <Button variant="destructive" onClick={() => setSaleRefundDialogOpen(true)}>Refund vehicle</Button>}
               <Button variant="outline" onClick={openEditSaleDialog}>
                 <PoundSterling className="h-4 w-4 mr-2" />
                 Edit Sale
@@ -1426,6 +1457,7 @@ export default function VehicleDetail({ id }: { id: string }) {
             <DialogTitle>Edit Vehicle</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEditSave} className="space-y-4">
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">Changes to purchase details are recorded as an audited correction. Current reports update; the original documents are kept unchanged in accounting history.</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Registration Number *</Label>
@@ -1606,6 +1638,15 @@ export default function VehicleDetail({ id }: { id: string }) {
             <DialogTitle>Edit Sale Details</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEditSaleSave} className="space-y-4">
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">Edits to an issued sale are recorded as an audited correction with before and after values. Current reports and invoices update; the original issued document is never erased.</p>
+            {saleEditConflict && (
+              <div role="alert" className="rounded-md border border-destructive p-3 space-y-2">
+                <p>Someone else changed this vehicle or invoice. Nothing was saved. Your draft is still shown below. Refresh and review the latest details before saving again.</p>
+                <Button type="button" variant="outline" onClick={() => {
+                  if (window.confirm("Replace your unsaved draft with the latest saved sale and invoice details?")) void openEditSaleDialog();
+                }}>Refresh and review latest details</Button>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Sale Date *</Label>
@@ -1812,7 +1853,7 @@ export default function VehicleDetail({ id }: { id: string }) {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditSaleDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isSavingSale}>
+              <Button type="submit" disabled={isSavingSale || saleEditConflict || !saleEditVersion}>
                 {isSavingSale && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Sale Details
               </Button>
@@ -1821,6 +1862,16 @@ export default function VehicleDetail({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
 
+      {vehicle.status === "sold" && <SaleCancellation vehicleId={vehicle.id} />}
+      {vehicle.status === "sold" && isAdmin && <Dialog open={saleRefundDialogOpen} onOpenChange={setSaleRefundDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Refund vehicle — {vehicle.registrationNumber}</DialogTitle>
+            <DialogDescription>Enter a reason and record the full refund. The vehicle returns to internal stock only, not the public showroom.</DialogDescription>
+          </DialogHeader>
+          {saleRefundDialogOpen && <SaleCancellation vehicleId={vehicle.id} startRefund />}
+        </DialogContent>
+      </Dialog>}
+      <VehicleSaleHistory vehicleId={vehicle.id} />
       <Tabs defaultValue="vehicle" className="w-full">
         <TabsList>
           <TabsTrigger value="vehicle">Vehicle</TabsTrigger>
@@ -2218,7 +2269,7 @@ export default function VehicleDetail({ id }: { id: string }) {
                 {editingPayments ? (
                   <div className="space-y-4">
                     {vehicleInvoice?.balancePayable != null && (
-                      <p className="text-sm text-slate-500">Invoice Total: <span className="font-medium text-slate-900">{formatCurrency(vehicleInvoice.balancePayable)}</span></p>
+                      <p className="text-sm text-slate-500">{vehicleInvoice.balancePayable < 0 ? "Invoice balance due to customer" : "Invoice Total"}: <span className="font-medium text-slate-900">{formatCurrency(Math.abs(vehicleInvoice.balancePayable))}</span></p>
                     )}
                     {paymentsDraft.length > 0 ? (
                       <PaymentSchedule rows={paymentsDraft} onChange={setPaymentsDraft} onRemove={removePaymentRow} showLabel={false} showTotal />
