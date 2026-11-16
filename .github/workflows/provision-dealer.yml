@@ -6,7 +6,7 @@ name: Set up dealer
 # console database, so the console shows each step.
 #
 # Repository secrets: NEON_API_KEY, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
-#   SENDGRID_API_KEY, CONSOLE_DATABASE_URL, CONSOLE_DEV_DATABASE_URL
+#   SENDGRID_API_KEY (console database connection comes from NEON_API_KEY)
 
 on:
   workflow_dispatch:
@@ -38,7 +38,6 @@ jobs:
     env:
       DEALER_ID: ${{ inputs.dealer_id }}
       RUN_ID: ${{ inputs.run_id }}
-      CONSOLE_DATABASE_URL: ${{ inputs.console == 'dev' && secrets.CONSOLE_DEV_DATABASE_URL || secrets.CONSOLE_DATABASE_URL }}
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -50,6 +49,8 @@ jobs:
       RELEASE: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+      - name: Console database connection from Neon (no stored password)
+        run: node .github/scripts/neon-url.mjs stockbook-console ${{ inputs.console == 'dev' && 'dev' || 'production' }} ${{ inputs.console == 'dev' && '--create' || '' }} --env CONSOLE_DATABASE_URL
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
