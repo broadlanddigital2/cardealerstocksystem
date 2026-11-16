@@ -6,8 +6,8 @@ name: Database migrations
 # from lib/db/migrations (generated from lib/db/src/schema and reviewed in PRs).
 #
 # Repository secret (Settings -> Secrets and variables -> Actions):
-#   NEON_DATABASE_URL       Neon connection string, live site (branch main)
-#   NEON_DEV_DATABASE_URL   used for a manual run on develop (normal dev migrations
+#   NEON_API_KEY            connection fetched from Neon project stockbook-demo (production; dev for a manual run on develop)
+#   (a manual run on develop uses the dev branch; normal dev migrations
 #                           run in "Deploy dev site")
 
 on:
@@ -31,13 +31,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'develop' && 'development' || 'production' }}
     env:
-      DATABASE_URL: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'develop' && secrets.NEON_DEV_DATABASE_URL || secrets.NEON_DATABASE_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_BRANCH: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'develop' && 'dev' || 'production' }}
     steps:
       - name: Check secret
         id: ready
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::notice::database secret for this branch not set — skipping migrations."
+          if [ -z "$NEON_API_KEY" ]; then
+            echo "::notice::NEON_API_KEY not set — skipping migrations."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
@@ -55,6 +56,9 @@ jobs:
           cache: pnpm
       - if: steps.ready.outputs.ok == 'true'
         run: pnpm install --frozen-lockfile
+      - name: Database connection from Neon (project stockbook-demo)
+        if: steps.ready.outputs.ok == 'true'
+        run: node .github/scripts/neon-url.mjs stockbook-demo "$NEON_BRANCH" --env DATABASE_URL
       - name: drizzle-kit migrate
         if: steps.ready.outputs.ok == 'true'
         run: .github/scripts/step.sh "Database migrations" pnpm --filter @workspace/db run migrate
