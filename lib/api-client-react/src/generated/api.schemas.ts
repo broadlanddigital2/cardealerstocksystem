@@ -158,6 +158,29 @@ export interface CashExpenseInput {
   amount: number;
 }
 
+export type VehicleAccountingEntryType = typeof VehicleAccountingEntryType[keyof typeof VehicleAccountingEntryType];
+
+
+export const VehicleAccountingEntryType = {
+  sale: 'sale',
+  credit: 'credit',
+} as const;
+
+export type VehicleAccountingSettings = {
+  /** @nullable */
+  vatRate?: string | null;
+  /** @nullable */
+  vatQualifyingCode?: string | null;
+  /** @nullable */
+  carSalesCode?: string | null;
+  /** @nullable */
+  carPurchasesCode?: string | null;
+  /** @nullable */
+  stockCode?: string | null;
+  /** @nullable */
+  otherSalesCode?: string | null;
+};
+
 export type VehiclePurchaseType = typeof VehiclePurchaseType[keyof typeof VehiclePurchaseType];
 
 
@@ -196,6 +219,55 @@ export const VehicleMethodOfDisposal = {
   other: 'other',
 } as const;
 
+export interface AccountingExtra {
+  description: string;
+  amount: number;
+  vat?: number;
+  onFinanceInvoice?: boolean;
+}
+
+export interface InvoiceExtra {
+  /** @minLength 1 */
+  description: string;
+  /** @minimum 0 */
+  amount: number;
+  /** @minimum 0 */
+  vat?: number;
+  /** When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice. */
+  onFinanceInvoice?: boolean;
+}
+
+export interface Invoice {
+  id: number;
+  vehicleId: number;
+  invoiceNumber: string;
+  invoiceDate: string;
+  customerName: string;
+  customerAddress: string;
+  salePrice: number;
+  /** @nullable */
+  saleVat?: number | null;
+  /** @nullable */
+  paymentMethod?: string | null;
+  /** @nullable */
+  partExchangeAllowance?: number | null;
+  balancePayable: number;
+  /** @nullable */
+  holdingDeposit?: number | null;
+  /** @nullable */
+  extras?: InvoiceExtra[] | null;
+  extrasOnFinanceInvoice?: boolean;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  financeCompanyName?: string | null;
+  /** @nullable */
+  financeCompanyAddress?: string | null;
+  /** @nullable */
+  financeCompanyEmail?: string | null;
+  createdAt: string;
+}
+
 export interface PaymentScheduleEntry {
   date?: string;
   /** @minimum 0 */
@@ -206,7 +278,20 @@ export interface PaymentScheduleEntry {
   type?: string | null;
 }
 
+/**
+ * Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.
+ */
 export interface Vehicle {
+  /** Opaque vehicle and invoice snapshot version returned by the detail GET. */
+  editVersion?: string;
+  accountingEntryType?: VehicleAccountingEntryType;
+  /** Original stock was deleted; the accounting posting remains retained. */
+  accountingArchived?: boolean;
+  /** @nullable */
+  originalInvoiceNumber?: string | null;
+  accountingExtras?: AccountingExtra[];
+  accountingSettings?: VehicleAccountingSettings;
+  editInvoice?: Invoice;
   id: number;
   stockNumber: string;
   /** @nullable */
@@ -409,18 +494,9 @@ export const VehicleUpdateMethodOfDisposal = {
   other: 'other',
 } as const;
 
-export interface InvoiceExtra {
-  /** @minLength 1 */
-  description: string;
-  /** @minimum 0 */
-  amount: number;
-  /** @minimum 0 */
-  vat?: number;
-  /** When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice. */
-  onFinanceInvoice?: boolean;
-}
-
 export interface VehicleUpdate {
+  /** Required when editing a recorded sale. Must match the detail GET snapshot. */
+  expectedEditVersion?: string;
   stockNumber?: string;
   /** @minLength 1 */
   registrationNumber?: string;
@@ -533,10 +609,20 @@ export const SaleInputMethodOfDisposal = {
 } as const;
 
 export interface SaleInput {
+  /**
+     * Must match the deposit currently held on the vehicle; omitted uses the stored deposit.
+     * @minimum 0
+     */
+  holdingDeposit?: number;
+  extras?: InvoiceExtra[];
+  extrasOnFinanceInvoice?: boolean;
+  financeCompanyName?: string;
+  financeCompanyAddress?: string;
+  financeCompanyEmail?: string;
   /** @minLength 1 */
   saleDate: string;
-  /** @minLength 1 */
-  salesInvoiceNumber: string;
+  /** Deprecated client hint, ignored. The server reserves the number transactionally and returns it in Vehicle.salesInvoiceNumber. */
+  salesInvoiceNumber?: string;
   /** @minLength 1 */
   buyerName: string;
   /** @minLength 1 */
@@ -821,40 +907,9 @@ export interface NextInvoiceNumber {
   invoiceNumber: string;
 }
 
-export interface Invoice {
-  id: number;
-  vehicleId: number;
-  invoiceNumber: string;
-  invoiceDate: string;
-  customerName: string;
-  customerAddress: string;
-  salePrice: number;
-  /** @nullable */
-  saleVat?: number | null;
-  /** @nullable */
-  paymentMethod?: string | null;
-  /** @nullable */
-  partExchangeAllowance?: number | null;
-  balancePayable: number;
-  /** @nullable */
-  holdingDeposit?: number | null;
-  /** @nullable */
-  extras?: InvoiceExtra[] | null;
-  extrasOnFinanceInvoice?: boolean;
-  /** @nullable */
-  notes?: string | null;
-  /** @nullable */
-  financeCompanyName?: string | null;
-  /** @nullable */
-  financeCompanyAddress?: string | null;
-  /** @nullable */
-  financeCompanyEmail?: string | null;
-  createdAt: string;
-}
-
 export interface InvoiceInput {
-  /** @minLength 1 */
-  invoiceNumber: string;
+  /** Deprecated client hint, ignored. Uses the sale's reserved number and returns the final number in Invoice.invoiceNumber. Retrying an existing invoice returns that invoice. */
+  invoiceNumber?: string;
   /** @minLength 1 */
   invoiceDate: string;
   /** @minLength 1 */
@@ -908,6 +963,160 @@ export interface UploadUrlResponse {
 
 export interface ErrorEnvelope {
   error: string;
+}
+
+export interface SaleCancellationInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  reason: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  cancellationDate: string;
+  /** @minimum 0 */
+  receivedAmount: number;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  reconciliation: string;
+  receiptsConfirmed: true;
+}
+
+export interface LegacySaleReviewInput {
+  /** @minLength 1 */
+  expectedEditVersion: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  documentReference?: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  notes?: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  refundReason?: string;
+  confirmed: boolean;
+}
+
+export interface SaleRefundInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  reason: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  paymentDate: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  recipient: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  method: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  reference: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  requestKey: string;
+}
+
+export interface CancellationState {
+  reviewRequired?: boolean;
+  eligible: boolean;
+  message: string;
+  cancelled: boolean;
+  gross: number;
+  deposit: number;
+  creditId?: number;
+  creditNumber?: string;
+}
+
+export type VehicleSaleHistoryEventType = typeof VehicleSaleHistoryEventType[keyof typeof VehicleSaleHistoryEventType];
+
+
+export const VehicleSaleHistoryEventType = {
+  sale: 'sale',
+  credit: 'credit',
+  refund: 'refund',
+  returned_stock: 'returned_stock',
+  correction: 'correction',
+  review: 'review',
+} as const;
+
+export interface VehicleSaleHistoryEvent {
+  id: string;
+  type: VehicleSaleHistoryEventType;
+  originalDocument?: string;
+  previousAmount?: number;
+  correctedAmount?: number;
+  vehicleId: number;
+  vehicleAvailable: boolean;
+  stockLabel: string;
+  date: string;
+  recordedAt: string;
+  documentNumber: string;
+  reason: string;
+  amount?: number;
+  actor?: string;
+  reference?: string;
+  method?: string;
+  recipient?: string;
+}
+
+export type AccountingHistoryEntryType = typeof AccountingHistoryEntryType[keyof typeof AccountingHistoryEntryType];
+
+
+export const AccountingHistoryEntryType = {
+  credit: 'credit',
+  refund: 'refund',
+  deposit_refund: 'deposit_refund',
+  correction: 'correction',
+  review: 'review',
+} as const;
+
+export interface AccountingHistoryEntry {
+  canRefund?: boolean;
+  returnedVehicleId?: number;
+  returnedVehicleAvailable?: boolean;
+  id: string;
+  type: AccountingHistoryEntryType;
+  vehicleId: number;
+  creditId?: number;
+  registration: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  creditNumber: string;
+  creditDate: string;
+  date: string;
+  reason: string;
+  actor: string;
+  recordedAt: string;
+  amount: number;
+  net: number;
+  vat: number;
+  refundDue: number;
+  refundState: string;
+  recipient: string;
+  reference: string;
+  method: string;
+  reconciliation: string;
+  originalDocument: string;
 }
 
 export type ListVehiclesParams = {

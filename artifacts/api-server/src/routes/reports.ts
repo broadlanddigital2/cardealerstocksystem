@@ -3,6 +3,8 @@ import { eq, and, desc, isNotNull } from "drizzle-orm";
 import { db, vehiclesTable, depositRefundsTable } from "@workspace/db";
 import { requireAdmin } from "../middlewares/requireAuth";
 import { serializeVehicle } from "../lib/vehicleSerializer";
+import { saleReportRows } from "../lib/saleLedger";
+import { GetSalesReportResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -22,7 +24,7 @@ router.get("/reports/stock", async (req, res): Promise<void> => {
 
   // In stock at date = purchased on/before date AND (not sold OR sold after date).
   const inStock = rows.filter((r) => {
-    if (r.purchaseDate > date) return false;
+    if ((r.stockReturnDate ?? r.purchaseDate) > date) return false;
     if (r.status === "sold" && r.saleDate && r.saleDate <= date) return false;
     return true;
   });
@@ -40,6 +42,7 @@ router.get("/reports/purchases", async (req, res): Promise<void> => {
     .where(eq(vehiclesTable.userId, userId));
 
   const filtered = rows.filter((r) => {
+    if (r.returnedFromVehicleId != null) return false; // Return is not another purchase.
     if (from && r.purchaseDate < from) return false;
     if (to && r.purchaseDate > to) return false;
     return true;
@@ -52,10 +55,7 @@ router.get("/reports/sales", async (req, res): Promise<void> => {
   const userId = req.userId!;
   const from = req.query.from as string | undefined;
   const to = req.query.to as string | undefined;
-  const rows = await db
-    .select()
-    .from(vehiclesTable)
-    .where(and(eq(vehiclesTable.userId, userId), eq(vehiclesTable.status, "sold")));
+  const rows = await saleReportRows(userId);
 
   const filtered = rows.filter((r) => {
     if (!r.saleDate) return false;
@@ -64,7 +64,7 @@ router.get("/reports/sales", async (req, res): Promise<void> => {
     return true;
   });
   filtered.sort((a, b) => ((a.saleDate ?? "") < (b.saleDate ?? "") ? -1 : 1));
-  res.json(filtered.map((r) => serializeVehicle(r)));
+  res.json(GetSalesReportResponse.parse(filtered));
 });
 
 router.get("/reports/deposits", async (req, res): Promise<void> => {

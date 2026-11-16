@@ -65,6 +65,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     ...(settings?.showroomEnabled ? [{ name: "Website", href: `${basePath}/showroom`, icon: Globe, external: true }] : []),
     // Reports is admin-only.
     ...(isAdmin ? [{ name: "Reports", href: "/reports", icon: FileText }] : []),
+    ...(isAdmin ? [{ name: "Cancelled Invoices", href: "/cancelled-invoices", icon: FileText }] : []),
     { name: "Cash Sheet", href: "/cash-sheet", icon: Banknote },
     { name: "Saved Contacts", href: "/saved-contacts", icon: Users },
     // Import (Cazoo/CSV) is available to all invited users.

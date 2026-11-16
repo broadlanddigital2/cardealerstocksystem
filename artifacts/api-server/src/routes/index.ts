@@ -7,6 +7,8 @@ import dashboardRouter from "./dashboard";
 import settingsRouter from "./settings";
 import invoicesRouter from "./invoices";
 import reportsRouter from "./reports";
+import saleCreditsRouter from "./saleCredits";
+import legacySaleReviewRouter from "./legacySaleReview";
 import sellersRouter from "./sellers";
 import cashExpensesRouter from "./cashExpenses";
 import financeCompaniesRouter from "./financeCompanies";
@@ -17,6 +19,8 @@ import cazooImportRouter from "./cazooImport";
 import vehicleLookupRouter from "./vehicleLookup";
 
 const router: IRouter = Router();
+router.use(saleCreditsRouter);
+router.use(legacySaleReviewRouter);
 
 router.use(healthRouter);
 router.use(accessRouter);

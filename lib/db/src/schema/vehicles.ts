@@ -37,6 +37,8 @@ export const vehiclesTable = pgTable(
     vatQualifying: boolean("vat_qualifying").notNull().default(false),
     purchaseVat: numeric("purchase_vat"),
     purchaseNotes: text("purchase_notes"),
+    returnedFromVehicleId: integer("returned_from_vehicle_id"),
+    stockReturnDate: text("stock_return_date"),
     purchaseDocumentReference: text("purchase_document_reference"),
     auctionCostNoVat: numeric("auction_cost_no_vat"),
     auctionCostWithVat: numeric("auction_cost_with_vat"),

@@ -16,6 +16,7 @@ import Stock from "@/pages/Stock";
 import AddVehicle from "@/pages/AddVehicle";
 import VehicleDetail from "@/pages/VehicleDetail";
 import Reports from "@/pages/Reports";
+import CancelledInvoices from "@/pages/CancelledInvoices";
 import Sellers from "@/pages/Sellers";
 import FinanceCompanies from "@/pages/FinanceCompanies";
 import SavedContacts from "@/pages/SavedContacts";
@@ -259,6 +260,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/vehicles/new"><ProtectedRoute component={AddVehicle} /></Route>
             <Route path="/vehicles/:id">{(params) => <ProtectedRoute component={VehicleDetail} id={params.id} />}</Route>
             <Route path="/reports"><ProtectedRoute component={Reports} adminOnly /></Route>
+            <Route path="/cancelled-invoices"><ProtectedRoute component={CancelledInvoices} adminOnly /></Route>
             <Route path="/cash-sheet"><ProtectedRoute component={CashSheet} /></Route>
             <Route path="/saved-contacts"><ProtectedRoute component={SavedContacts} /></Route>
             <Route path="/sellers"><ProtectedRoute component={Sellers} /></Route>

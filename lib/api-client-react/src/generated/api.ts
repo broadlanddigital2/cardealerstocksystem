@@ -20,9 +20,11 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountingHistoryEntry,
   AppUser,
   AppUserInput,
   AppUserUpdate,
+  CancellationState,
   CashExpense,
   CashExpenseInput,
   DashboardSummary,
@@ -43,9 +45,12 @@ import type {
   ImportStockInput,
   Invoice,
   InvoiceInput,
+  LegacySaleReviewInput,
   ListVehiclesParams,
   NextInvoiceNumber,
+  SaleCancellationInput,
   SaleInput,
+  SaleRefundInput,
   Seller,
   SellerInput,
   SellerUpdate,
@@ -55,6 +60,7 @@ import type {
   VehicleInput,
   VehicleLookup,
   VehicleLookupInput,
+  VehicleSaleHistoryEvent,
   VehicleUpdate
 } from './api.schemas';
 
@@ -84,6 +90,468 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getApproveLegacySaleReviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/vehicles/${id}/accounting-review`
+}
+
+export const approveLegacySaleReview = async (id: number,
+    legacySaleReviewInput: LegacySaleReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<CancellationState> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CancellationState>(getApproveLegacySaleReviewUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(legacySaleReviewInput)
+  }
+);}
+
+
+
+
+
+export const getApproveLegacySaleReviewMutationKey = () => ['approveLegacySaleReview'] as const;
+
+export const getApproveLegacySaleReviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveLegacySaleReview>>, TError,ApproveLegacySaleReviewMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveLegacySaleReview>>, TError,ApproveLegacySaleReviewMutationVariables, TContext> => {
+
+const mutationKey = getApproveLegacySaleReviewMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveLegacySaleReview>>, ApproveLegacySaleReviewMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  approveLegacySaleReview(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveLegacySaleReviewMutationResult = NonNullable<Awaited<ReturnType<typeof approveLegacySaleReview>>>
+    export type ApproveLegacySaleReviewMutationBody = BodyType<LegacySaleReviewInput>
+    export type ApproveLegacySaleReviewMutationError = ErrorType<void>
+    export type ApproveLegacySaleReviewMutationVariables = {id: number;data: BodyType<LegacySaleReviewInput>}
+
+    export const useApproveLegacySaleReview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveLegacySaleReview>>, TError,ApproveLegacySaleReviewMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveLegacySaleReview>>,
+        TError,
+        ApproveLegacySaleReviewMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApproveLegacySaleReviewMutationOptions(options));
+    }
+
+export const getGetVehicleSaleHistoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/vehicles/${id}/sale-history`
+}
+
+export const getVehicleSaleHistory = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<VehicleSaleHistoryEvent[]> => {
+
+  return customFetch<VehicleSaleHistoryEvent[]>(getGetVehicleSaleHistoryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVehicleSaleHistoryQueryKey = (id: number,) => {
+    return [
+    `/api/vehicles/${id}/sale-history`
+    ] as const;
+    }
+
+
+export const getGetVehicleSaleHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getVehicleSaleHistory>>, TError = ErrorType<ErrorEnvelope>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVehicleSaleHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVehicleSaleHistoryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVehicleSaleHistory>>> = ({ signal }) => getVehicleSaleHistory(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVehicleSaleHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVehicleSaleHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getVehicleSaleHistory>>>
+export type GetVehicleSaleHistoryQueryError = ErrorType<ErrorEnvelope>
+
+
+
+export function useGetVehicleSaleHistory<TData = Awaited<ReturnType<typeof getVehicleSaleHistory>>, TError = ErrorType<ErrorEnvelope>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVehicleSaleHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVehicleSaleHistoryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAccountingHistoryUrl = () => {
+
+
+
+
+  return `/api/accounting-history`
+}
+
+export const listAccountingHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountingHistoryEntry[]> => {
+
+  return customFetch<AccountingHistoryEntry[]>(getListAccountingHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountingHistoryQueryKey = () => {
+    return [
+    `/api/accounting-history`
+    ] as const;
+    }
+
+
+export const getListAccountingHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listAccountingHistory>>, TError = ErrorType<ErrorEnvelope>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountingHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountingHistory>>> = ({ signal }) => listAccountingHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountingHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountingHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountingHistory>>>
+export type ListAccountingHistoryQueryError = ErrorType<ErrorEnvelope>
+
+
+
+export function useListAccountingHistory<TData = Awaited<ReturnType<typeof listAccountingHistory>>, TError = ErrorType<ErrorEnvelope>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountingHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCancellationStateUrl = (id: number,) => {
+
+
+
+
+  return `/api/vehicles/${id}/cancellation`
+}
+
+export const getCancellationState = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<CancellationState> => {
+
+  return customFetch<CancellationState>(getGetCancellationStateUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCancellationStateQueryKey = (id: number,) => {
+    return [
+    `/api/vehicles/${id}/cancellation`
+    ] as const;
+    }
+
+
+export const getGetCancellationStateQueryOptions = <TData = Awaited<ReturnType<typeof getCancellationState>>, TError = ErrorType<ErrorEnvelope>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCancellationState>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCancellationStateQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCancellationState>>> = ({ signal }) => getCancellationState(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCancellationState>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCancellationStateQueryResult = NonNullable<Awaited<ReturnType<typeof getCancellationState>>>
+export type GetCancellationStateQueryError = ErrorType<ErrorEnvelope>
+
+
+
+export function useGetCancellationState<TData = Awaited<ReturnType<typeof getCancellationState>>, TError = ErrorType<ErrorEnvelope>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCancellationState>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCancellationStateQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCancelIssuedSaleUrl = (id: number,) => {
+
+
+
+
+  return `/api/vehicles/${id}/cancellation`
+}
+
+export const cancelIssuedSale = async (id: number,
+    saleCancellationInput: SaleCancellationInput, options?: Parameters<typeof customFetch>[1]): Promise<CancellationState> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CancellationState>(getCancelIssuedSaleUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saleCancellationInput)
+  }
+);}
+
+
+
+
+
+export const getCancelIssuedSaleMutationKey = () => ['cancelIssuedSale'] as const;
+
+export const getCancelIssuedSaleMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelIssuedSale>>, TError,CancelIssuedSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelIssuedSale>>, TError,CancelIssuedSaleMutationVariables, TContext> => {
+
+const mutationKey = getCancelIssuedSaleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelIssuedSale>>, CancelIssuedSaleMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  cancelIssuedSale(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelIssuedSaleMutationResult = NonNullable<Awaited<ReturnType<typeof cancelIssuedSale>>>
+    export type CancelIssuedSaleMutationBody = BodyType<SaleCancellationInput>
+    export type CancelIssuedSaleMutationError = ErrorType<ErrorEnvelope>
+    export type CancelIssuedSaleMutationVariables = {id: number;data: BodyType<SaleCancellationInput>}
+
+    export const useCancelIssuedSale = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelIssuedSale>>, TError,CancelIssuedSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelIssuedSale>>,
+        TError,
+        CancelIssuedSaleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCancelIssuedSaleMutationOptions(options));
+    }
+
+export const getConfirmSaleRefundUrl = (id: number,) => {
+
+
+
+
+  return `/api/credits/${id}/refunds`
+}
+
+export const confirmSaleRefund = async (id: number,
+    saleRefundInput: SaleRefundInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountingHistoryEntry> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AccountingHistoryEntry>(getConfirmSaleRefundUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saleRefundInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmSaleRefundMutationKey = () => ['confirmSaleRefund'] as const;
+
+export const getConfirmSaleRefundMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmSaleRefund>>, TError,ConfirmSaleRefundMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmSaleRefund>>, TError,ConfirmSaleRefundMutationVariables, TContext> => {
+
+const mutationKey = getConfirmSaleRefundMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmSaleRefund>>, ConfirmSaleRefundMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  confirmSaleRefund(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmSaleRefundMutationResult = NonNullable<Awaited<ReturnType<typeof confirmSaleRefund>>>
+    export type ConfirmSaleRefundMutationBody = BodyType<SaleRefundInput>
+    export type ConfirmSaleRefundMutationError = ErrorType<ErrorEnvelope>
+    export type ConfirmSaleRefundMutationVariables = {id: number;data: BodyType<SaleRefundInput>}
+
+    export const useConfirmSaleRefund = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmSaleRefund>>, TError,ConfirmSaleRefundMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmSaleRefund>>,
+        TError,
+        ConfirmSaleRefundMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConfirmSaleRefundMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 
@@ -674,7 +1142,8 @@ export const getRecordSaleUrl = (id: number,) => {
 }
 
 /**
- * @summary Record a sale against a vehicle
+ * Allocates the final salesInvoiceNumber under a dealer-scoped transaction lock; client number hints are ignored. An unchanged retry returns the saved vehicle without additional writes. A changed request for a sold vehicle conflicts; use sale editing or historical invoice recovery instead.
+ * @summary Atomically record a sale, linked part exchange and invoice
  */
 export const recordSale = async (id: number,
     saleInput: SaleInput, options?: Parameters<typeof customFetch>[1]): Promise<Vehicle> => {
@@ -741,7 +1210,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RecordSaleMutationVariables = {id: number;data: BodyType<SaleInput>}
 
     /**
- * @summary Record a sale against a vehicle
+ * @summary Atomically record a sale, linked part exchange and invoice
  */
 export const useRecordSale = <TError = ErrorType<ErrorEnvelope>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordSale>>, TError,RecordSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2561,6 +3030,7 @@ export const getGetNextInvoiceNumberUrl = () => {
 }
 
 /**
+ * Advisory preview only, not a reservation. Use the number returned by recordSale.
  * @summary Get the next auto-generated sales invoice number
  */
 export const getNextInvoiceNumber = async ( options?: Parameters<typeof customFetch>[1]): Promise<NextInvoiceNumber> => {
@@ -2792,6 +3262,7 @@ export const getCreateVehicleInvoiceUrl = (id: number,) => {
 }
 
 /**
+ * Uses the sale's reserved number, ignoring client number hints. A retry returns the already issued invoice without modifying it.
  * @summary Create a sales invoice for a sold vehicle
  */
 export const createVehicleInvoice = async (id: number,

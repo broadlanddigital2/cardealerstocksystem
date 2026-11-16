@@ -9,28 +9,18 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { serializeInvoice } from "../lib/vehicleSerializer";
+import { invoiceValues } from "../lib/invoiceValues";
+import { nextInvoiceNumber, lockInvoiceNumbers, assertInvoiceNumberAvailable, invoiceNumberError, InvoiceNumberConflict } from "../lib/invoiceNumbers";
 
 const router: IRouter = Router();
 
 router.use("/invoices", requireAuth);
 router.use("/vehicles/:id/invoice", requireAuth);
 
-async function nextInvoiceNumber(userId: string): Promise<string> {
-  const rows = await db
-    .select({ invoiceNumber: invoicesTable.invoiceNumber })
-    .from(invoicesTable)
-    .where(eq(invoicesTable.userId, userId));
-  let max = 0;
-  for (const r of rows) {
-    const n = parseInt(String(r.invoiceNumber).replace(/\D/g, ""), 10);
-    if (!Number.isNaN(n) && n > max) max = n;
-  }
-  return `INV-${String(max + 1).padStart(4, "0")}`;
-}
-
 router.get("/invoices/next-number", async (req, res): Promise<void> => {
   const userId = req.userId!;
-  const invoiceNumber = await nextInvoiceNumber(userId);
+  // Preview only: a number is reserved only by the sale transaction.
+  const invoiceNumber = await nextInvoiceNumber(db, userId);
   res.json({ invoiceNumber });
 });
 
@@ -117,60 +107,33 @@ router.post("/vehicles/:id/invoice", async (req, res): Promise<void> => {
 
   const d = parsed.data;
 
-  // Rule: the balance payable can never be negative (deposit and/or
-  // part-exchange allowance cannot exceed the sale price).
-  if (Number(d.balancePayable) < 0) {
-    res.status(400).json({
-      error:
-        "Balance payable cannot be negative — the holding deposit and part-exchange allowance cannot exceed the sale price.",
-    });
-    return;
-  }
-
   try {
-    const [row] = await db
+    const row = await db.transaction(async (tx) => {
+      await lockInvoiceNumbers(tx, userId);
+      const [current] = await tx.select().from(vehiclesTable).where(and(
+        eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId),
+      )).for("update");
+      if (!current?.salesInvoiceNumber)
+        throw new InvoiceNumberConflict("Record the sale before creating its invoice. Refresh this vehicle and try again.");
+      const invoiceNumber = current.salesInvoiceNumber;
+      await assertInvoiceNumberAvailable(tx, userId, current.id, invoiceNumber);
+      const [issued] = await tx.select().from(invoicesTable).where(and(
+        eq(invoicesTable.userId, userId), eq(invoicesTable.vehicleId, current.id),
+        eq(invoicesTable.invoiceNumber, invoiceNumber),
+      ));
+      if (issued) return issued; // Safe retry after a lost response.
+      const [created] = await tx
       .insert(invoicesTable)
-      .values({
-        userId,
-        vehicleId: params.data.id,
-        invoiceNumber: d.invoiceNumber,
-        invoiceDate: d.invoiceDate,
-        customerName: d.customerName,
-        customerAddress: d.customerAddress,
-        salePrice: String(d.salePrice),
-        saleVat: d.saleVat != null ? String(d.saleVat) : null,
-        paymentMethod: d.paymentMethod ?? null,
-        partExchangeAllowance:
-          d.partExchangeAllowance != null
-            ? String(d.partExchangeAllowance)
-            : null,
-        balancePayable: String(d.balancePayable),
-        holdingDeposit:
-          d.holdingDeposit != null ? String(d.holdingDeposit) : null,
-        extras: d.extras ?? null,
-        // Per-item flags drive finance-invoice inclusion now; keep the legacy
-        // invoice-level flag in sync (true when any extra is on finance) so older
-        // read paths and fallbacks stay consistent.
-        extrasOnFinanceInvoice:
-          (d.extras ?? []).some((e) => e.onFinanceInvoice) ||
-          (d.extrasOnFinanceInvoice ?? false),
-        notes: d.notes ?? null,
-        financeCompanyName: d.financeCompanyName ?? null,
-        financeCompanyAddress: d.financeCompanyAddress ?? null,
-        financeCompanyEmail: d.financeCompanyEmail ?? null,
-      })
+      .values(invoiceValues(userId, params.data.id, { ...d, invoiceNumber }))
       .returning();
+      return created;
+    });
 
     res.status(201).json(serializeInvoice(row));
   } catch (err) {
-    if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505"
-    ) {
-      res
-        .status(400)
-        .json({ error: "Invoice number already exists. Choose another." });
+    const message = invoiceNumberError(err);
+    if (message) {
+      res.status(409).json({ error: message });
       return;
     }
     throw err;

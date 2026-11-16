@@ -8,6 +8,207 @@
 import * as zod from 'zod';
 
 
+export const ApproveLegacySaleReviewParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+export const approveLegacySaleReviewBodyDocumentReferenceMax = 2000;
+
+export const approveLegacySaleReviewBodyNotesMax = 4000;
+
+export const approveLegacySaleReviewBodyRefundReasonMax = 4000;
+
+
+
+export const ApproveLegacySaleReviewBody = zod.object({
+  "expectedEditVersion": zod.string().min(1),
+  "documentReference": zod.string().min(1).max(approveLegacySaleReviewBodyDocumentReferenceMax).optional(),
+  "notes": zod.string().min(1).max(approveLegacySaleReviewBodyNotesMax).optional(),
+  "refundReason": zod.string().min(1).max(approveLegacySaleReviewBodyRefundReasonMax).optional(),
+  "confirmed": zod.boolean()
+})
+
+export const ApproveLegacySaleReviewResponse = zod.object({
+  "reviewRequired": zod.boolean().optional(),
+  "eligible": zod.boolean(),
+  "message": zod.string(),
+  "cancelled": zod.boolean(),
+  "gross": zod.number(),
+  "deposit": zod.number(),
+  "creditId": zod.number().int().optional(),
+  "creditNumber": zod.string().optional()
+})
+
+
+
+
+
+export const GetVehicleSaleHistoryParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const GetVehicleSaleHistoryResponseItem = zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['sale', 'credit', 'refund', 'returned_stock', 'correction', 'review']),
+  "originalDocument": zod.string().optional(),
+  "previousAmount": zod.number().optional(),
+  "correctedAmount": zod.number().optional(),
+  "vehicleId": zod.number().int(),
+  "vehicleAvailable": zod.boolean(),
+  "stockLabel": zod.string(),
+  "date": zod.string(),
+  "recordedAt": zod.string(),
+  "documentNumber": zod.string(),
+  "reason": zod.string(),
+  "amount": zod.number().optional(),
+  "actor": zod.string().optional(),
+  "reference": zod.string().optional(),
+  "method": zod.string().optional(),
+  "recipient": zod.string().optional()
+})
+export const GetVehicleSaleHistoryResponse = zod.array(GetVehicleSaleHistoryResponseItem)
+
+
+export const ListAccountingHistoryResponseItem = zod.object({
+  "canRefund": zod.boolean().optional(),
+  "returnedVehicleId": zod.number().int().optional(),
+  "returnedVehicleAvailable": zod.boolean().optional(),
+  "id": zod.string(),
+  "type": zod.enum(['credit', 'refund', 'deposit_refund', 'correction', 'review']),
+  "vehicleId": zod.number().int(),
+  "creditId": zod.number().int().optional(),
+  "registration": zod.string(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "creditNumber": zod.string(),
+  "creditDate": zod.string(),
+  "date": zod.string(),
+  "reason": zod.string(),
+  "actor": zod.string(),
+  "recordedAt": zod.string(),
+  "amount": zod.number(),
+  "net": zod.number(),
+  "vat": zod.number(),
+  "refundDue": zod.number(),
+  "refundState": zod.string(),
+  "recipient": zod.string(),
+  "reference": zod.string(),
+  "method": zod.string(),
+  "reconciliation": zod.string(),
+  "originalDocument": zod.string()
+})
+export const ListAccountingHistoryResponse = zod.array(ListAccountingHistoryResponseItem)
+
+
+export const GetCancellationStateParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const GetCancellationStateResponse = zod.object({
+  "reviewRequired": zod.boolean().optional(),
+  "eligible": zod.boolean(),
+  "message": zod.string(),
+  "cancelled": zod.boolean(),
+  "gross": zod.number(),
+  "deposit": zod.number(),
+  "creditId": zod.number().int().optional(),
+  "creditNumber": zod.string().optional()
+})
+
+
+export const CancelIssuedSaleParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const cancelIssuedSaleBodyReasonMax = 2000;
+
+export const cancelIssuedSaleBodyCancellationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const cancelIssuedSaleBodyReceivedAmountMin = 0;
+
+export const cancelIssuedSaleBodyReconciliationMax = 4000;
+
+
+
+export const CancelIssuedSaleBody = zod.object({
+  "reason": zod.string().min(1).max(cancelIssuedSaleBodyReasonMax),
+  "cancellationDate": zod.string().regex(cancelIssuedSaleBodyCancellationDateRegExp),
+  "receivedAmount": zod.number().min(cancelIssuedSaleBodyReceivedAmountMin),
+  "reconciliation": zod.string().min(1).max(cancelIssuedSaleBodyReconciliationMax),
+  "receiptsConfirmed": zod.literal(true)
+})
+
+export const CancelIssuedSaleResponse = zod.object({
+  "reviewRequired": zod.boolean().optional(),
+  "eligible": zod.boolean(),
+  "message": zod.string(),
+  "cancelled": zod.boolean(),
+  "gross": zod.number(),
+  "deposit": zod.number(),
+  "creditId": zod.number().int().optional(),
+  "creditNumber": zod.string().optional()
+})
+
+
+export const ConfirmSaleRefundParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const confirmSaleRefundBodyReasonMax = 2000;
+
+export const confirmSaleRefundBodyAmountExclusiveMin = 0;
+
+export const confirmSaleRefundBodyPaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const confirmSaleRefundBodyRecipientMax = 300;
+
+export const confirmSaleRefundBodyMethodMax = 100;
+
+export const confirmSaleRefundBodyReferenceMax = 300;
+
+export const confirmSaleRefundBodyRequestKeyMax = 100;
+
+
+
+export const ConfirmSaleRefundBody = zod.object({
+  "reason": zod.string().min(1).max(confirmSaleRefundBodyReasonMax),
+  "amount": zod.number().gt(confirmSaleRefundBodyAmountExclusiveMin),
+  "paymentDate": zod.string().regex(confirmSaleRefundBodyPaymentDateRegExp),
+  "recipient": zod.string().min(1).max(confirmSaleRefundBodyRecipientMax),
+  "method": zod.string().min(1).max(confirmSaleRefundBodyMethodMax),
+  "reference": zod.string().min(1).max(confirmSaleRefundBodyReferenceMax),
+  "requestKey": zod.string().min(1).max(confirmSaleRefundBodyRequestKeyMax)
+})
+
+export const ConfirmSaleRefundResponse = zod.object({
+  "canRefund": zod.boolean().optional(),
+  "returnedVehicleId": zod.number().int().optional(),
+  "returnedVehicleAvailable": zod.boolean().optional(),
+  "id": zod.string(),
+  "type": zod.enum(['credit', 'refund', 'deposit_refund', 'correction', 'review']),
+  "vehicleId": zod.number().int(),
+  "creditId": zod.number().int().optional(),
+  "registration": zod.string(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "creditNumber": zod.string(),
+  "creditDate": zod.string(),
+  "date": zod.string(),
+  "reason": zod.string(),
+  "actor": zod.string(),
+  "recordedAt": zod.string(),
+  "amount": zod.number(),
+  "net": zod.number(),
+  "vat": zod.number(),
+  "refundDue": zod.number(),
+  "refundState": zod.string(),
+  "recipient": zod.string(),
+  "reference": zod.string(),
+  "method": zod.string(),
+  "reconciliation": zod.string(),
+  "originalDocument": zod.string()
+})
+
+
 /**
  * Returns server health status
  * @summary Health check
@@ -55,11 +256,60 @@ export const ListVehiclesQueryParams = zod.object({
   "party": zod.coerce.string().optional().describe('Search seller or buyer name.')
 })
 
+
+export const listVehiclesResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const listVehiclesResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const listVehiclesResponsePaymentsItemAmountMin = 0;
 
 
 
 export const ListVehiclesResponseItem = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(listVehiclesResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(listVehiclesResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -126,7 +376,7 @@ export const ListVehiclesResponseItem = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 export const ListVehiclesResponse = zod.array(ListVehiclesResponseItem)
 
 
@@ -180,11 +430,60 @@ export const CreateVehicleBody = zod.object({
   "photoUrls": zod.array(zod.string()).optional()
 })
 
+
+export const createVehicleResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const createVehicleResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const createVehicleResponsePaymentsItemAmountMin = 0;
 
 
 
 export const CreateVehicleResponse = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(createVehicleResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(createVehicleResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -251,7 +550,7 @@ export const CreateVehicleResponse = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 
 
 /**
@@ -261,11 +560,60 @@ export const GetVehicleParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+
+export const getVehicleResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const getVehicleResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const getVehicleResponsePaymentsItemAmountMin = 0;
 
 
 
 export const GetVehicleResponse = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(getVehicleResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(getVehicleResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -332,7 +680,7 @@ export const GetVehicleResponse = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 
 
 /**
@@ -380,6 +728,7 @@ export const updateVehicleBodyAskingPriceMin = 0;
 
 
 export const UpdateVehicleBody = zod.object({
+  "expectedEditVersion": zod.string().optional().describe('Required when editing a recorded sale. Must match the detail GET snapshot.'),
   "stockNumber": zod.string().optional(),
   "registrationNumber": zod.string().min(1).optional(),
   "make": zod.string().min(1).optional(),
@@ -443,11 +792,60 @@ export const UpdateVehicleBody = zod.object({
   "photoUrls": zod.array(zod.string()).nullish()
 })
 
+
+export const updateVehicleResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const updateVehicleResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const updateVehicleResponsePaymentsItemAmountMin = 0;
 
 
 
 export const UpdateVehicleResponse = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(updateVehicleResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(updateVehicleResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -514,7 +912,7 @@ export const UpdateVehicleResponse = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 
 
 /**
@@ -528,12 +926,19 @@ export const DeleteVehicleResponse = zod.void()
 
 
 /**
- * @summary Record a sale against a vehicle
+ * Allocates the final salesInvoiceNumber under a dealer-scoped transaction lock; client number hints are ignored. An unchanged retry returns the saved vehicle without additional writes. A changed request for a sold vehicle conflicts; use sale editing or historical invoice recovery instead.
+ * @summary Atomically record a sale, linked part exchange and invoice
  */
 export const RecordSaleParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const recordSaleBodyHoldingDepositMin = 0;
+
+
+export const recordSaleBodyExtrasItemAmountMin = 0;
+
+export const recordSaleBodyExtrasItemVatMin = 0;
 
 
 
@@ -554,8 +959,19 @@ export const recordSaleBodyPartExchangeMileageMin = 0;
 
 
 export const RecordSaleBody = zod.object({
+  "holdingDeposit": zod.number().min(recordSaleBodyHoldingDepositMin).optional().describe('Must match the deposit currently held on the vehicle; omitted uses the stored deposit.'),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(recordSaleBodyExtrasItemAmountMin),
+  "vat": zod.number().min(recordSaleBodyExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).optional(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "financeCompanyName": zod.string().optional(),
+  "financeCompanyAddress": zod.string().optional(),
+  "financeCompanyEmail": zod.string().optional(),
   "saleDate": zod.string().min(1),
-  "salesInvoiceNumber": zod.string().min(1),
+  "salesInvoiceNumber": zod.string().optional().describe('Deprecated client hint, ignored. The server reserves the number transactionally and returns it in Vehicle.salesInvoiceNumber.'),
   "buyerName": zod.string().min(1),
   "buyerAddress": zod.string().min(1),
   "buyerEmail": zod.string().optional(),
@@ -581,11 +997,60 @@ export const RecordSaleBody = zod.object({
   "partExchangeMileage": zod.number().int().min(recordSaleBodyPartExchangeMileageMin).optional()
 })
 
+
+export const recordSaleResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const recordSaleResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const recordSaleResponsePaymentsItemAmountMin = 0;
 
 
 
 export const RecordSaleResponse = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(recordSaleResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(recordSaleResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -652,7 +1117,7 @@ export const RecordSaleResponse = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 
 
 /**
@@ -662,11 +1127,60 @@ export const RefundHoldingDepositParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+
+export const refundHoldingDepositResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const refundHoldingDepositResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const refundHoldingDepositResponsePaymentsItemAmountMin = 0;
 
 
 
 export const RefundHoldingDepositResponse = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(refundHoldingDepositResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(refundHoldingDepositResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -733,7 +1247,7 @@ export const RefundHoldingDepositResponse = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 
 
 /**
@@ -758,11 +1272,60 @@ export const RecordHoldingDepositBody = zod.object({
   "holdingDepositPaymentMethod": zod.string().optional()
 })
 
+
+export const recordHoldingDepositResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const recordHoldingDepositResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const recordHoldingDepositResponsePaymentsItemAmountMin = 0;
 
 
 
 export const RecordHoldingDepositResponse = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(recordHoldingDepositResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(recordHoldingDepositResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -829,7 +1392,7 @@ export const RecordHoldingDepositResponse = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 
 
 /**
@@ -1438,6 +2001,7 @@ export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem)
 
 
 /**
+ * Advisory preview only, not a reservation. Use the number returned by recordSale.
  * @summary Get the next auto-generated sales invoice number
  */
 export const GetNextInvoiceNumberResponse = zod.object({
@@ -1530,12 +2094,12 @@ export const GetVehicleInvoiceResponse = zod.object({
 
 
 /**
+ * Uses the sale's reserved number, ignoring client number hints. A retry returns the already issued invoice without modifying it.
  * @summary Create a sales invoice for a sold vehicle
  */
 export const CreateVehicleInvoiceParams = zod.object({
   "id": zod.coerce.number().int()
 })
-
 
 
 
@@ -1556,7 +2120,7 @@ export const createVehicleInvoiceBodyExtrasItemVatMin = 0;
 
 
 export const CreateVehicleInvoiceBody = zod.object({
-  "invoiceNumber": zod.string().min(1),
+  "invoiceNumber": zod.string().optional().describe('Deprecated client hint, ignored. Uses the sale\'s reserved number and returns the final number in Invoice.invoiceNumber. Retrying an existing invoice returns that invoice.'),
   "invoiceDate": zod.string().min(1),
   "customerName": zod.string().min(1),
   "customerAddress": zod.string().min(1),
@@ -1622,11 +2186,60 @@ export const GetStockReportQueryParams = zod.object({
   "date": zod.coerce.string().describe('The selected date (YYYY-MM-DD).')
 })
 
+
+export const getStockReportResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const getStockReportResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const getStockReportResponsePaymentsItemAmountMin = 0;
 
 
 
 export const GetStockReportResponseItem = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(getStockReportResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(getStockReportResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -1693,7 +2306,7 @@ export const GetStockReportResponseItem = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 export const GetStockReportResponse = zod.array(GetStockReportResponseItem)
 
 
@@ -1705,11 +2318,60 @@ export const GetPurchasesReportQueryParams = zod.object({
   "to": zod.coerce.string().optional().describe('End date or up-to date (YYYY-MM-DD).')
 })
 
+
+export const getPurchasesReportResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const getPurchasesReportResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const getPurchasesReportResponsePaymentsItemAmountMin = 0;
 
 
 
 export const GetPurchasesReportResponseItem = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(getPurchasesReportResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(getPurchasesReportResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -1776,7 +2438,7 @@ export const GetPurchasesReportResponseItem = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 export const GetPurchasesReportResponse = zod.array(GetPurchasesReportResponseItem)
 
 
@@ -1788,11 +2450,60 @@ export const GetSalesReportQueryParams = zod.object({
   "to": zod.coerce.string().optional().describe('End date or up-to date (YYYY-MM-DD).')
 })
 
+
+export const getSalesReportResponseEditInvoiceExtrasItemAmountMin = 0;
+
+export const getSalesReportResponseEditInvoiceExtrasItemVatMin = 0;
+
 export const getSalesReportResponsePaymentsItemAmountMin = 0;
 
 
 
 export const GetSalesReportResponseItem = zod.object({
+  "editVersion": zod.string().optional().describe('Opaque vehicle and invoice snapshot version returned by the detail GET.'),
+  "accountingEntryType": zod.enum(['sale', 'credit']).optional(),
+  "accountingArchived": zod.boolean().optional().describe('Original stock was deleted; the accounting posting remains retained.'),
+  "originalInvoiceNumber": zod.string().nullish(),
+  "accountingExtras": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number(),
+  "vat": zod.number().optional(),
+  "onFinanceInvoice": zod.boolean().optional()
+})).optional(),
+  "accountingSettings": zod.object({
+  "vatRate": zod.string().nullish(),
+  "vatQualifyingCode": zod.string().nullish(),
+  "carSalesCode": zod.string().nullish(),
+  "carPurchasesCode": zod.string().nullish(),
+  "stockCode": zod.string().nullish(),
+  "otherSalesCode": zod.string().nullish()
+}).optional(),
+  "editInvoice": zod.object({
+  "id": zod.number().int(),
+  "vehicleId": zod.number().int(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.string(),
+  "customerName": zod.string(),
+  "customerAddress": zod.string(),
+  "salePrice": zod.number(),
+  "saleVat": zod.number().nullish(),
+  "paymentMethod": zod.string().nullish(),
+  "partExchangeAllowance": zod.number().nullish(),
+  "balancePayable": zod.number(),
+  "holdingDeposit": zod.number().nullish(),
+  "extras": zod.array(zod.object({
+  "description": zod.string().min(1),
+  "amount": zod.number().min(getSalesReportResponseEditInvoiceExtrasItemAmountMin),
+  "vat": zod.number().min(getSalesReportResponseEditInvoiceExtrasItemVatMin).optional(),
+  "onFinanceInvoice": zod.boolean().optional().describe('When true, this extra is billed on the finance/vehicle invoice rather than a separate extras invoice.')
+})).nullish(),
+  "extrasOnFinanceInvoice": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "financeCompanyName": zod.string().nullish(),
+  "financeCompanyAddress": zod.string().nullish(),
+  "financeCompanyEmail": zod.string().nullish(),
+  "createdAt": zod.string()
+}).optional(),
   "id": zod.number().int(),
   "stockNumber": zod.string(),
   "purchaseNumber": zod.string().nullish(),
@@ -1859,7 +2570,7 @@ export const GetSalesReportResponseItem = zod.object({
   "photoUrls": zod.array(zod.string()).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).describe('Sales reports can include signed credit postings; these have accountingEntryType credit and a negative report-only id.')
 export const GetSalesReportResponse = zod.array(GetSalesReportResponseItem)
 
 
